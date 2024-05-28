@@ -1,0 +1,29 @@
+version: "3.3"
+
+services:
+
+  postgres:
+    container_name: postgres
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-postgres
+    environment:
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=changeit
+      - POSTGRES_DB=db
+    ports:
+      - "5432:5432"
+
+  redis:
+      container_name: redis
+      image: redis:alpine
+      ports:
+        - "6379:6379"
+
+  # Just a machine running ubuntu, with 'dig' installed so that we can observe the docker compose environment.
+  ubuntu:
+    container_name: ubuntu
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-ubuntu
+    tty: true
