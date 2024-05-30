@@ -15,7 +15,7 @@ class BrokerPostgreSQLTests {
         // Assert
         assertDoesNotThrow {
             BrokerPostgreSQL(
-                Environment.getPostgreSQLDbUrl(),
+                Environment.getPostgreSqlDbUrl(),
                 dbConnectionPoolSize = ACCEPTABLE_CONNECTION_POOL_SIZE
             )
         }
@@ -28,7 +28,7 @@ class BrokerPostgreSQLTests {
         // Assert
         assertFailsWith<BrokerException.ConnectionPoolSizeException> {
             BrokerPostgreSQL(
-                Environment.getPostgreSQLDbUrl(),
+                Environment.getPostgreSqlDbUrl(),
                 dbConnectionPoolSize = BIG_CONNECTION_POOL_SIZE
             )
         }
@@ -41,7 +41,7 @@ class BrokerPostgreSQLTests {
         // Assert
         assertFailsWith<BrokerException.ConnectionPoolSizeException> {
             BrokerPostgreSQL(
-                Environment.getPostgreSQLDbUrl(),
+                Environment.getPostgreSqlDbUrl(),
                 dbConnectionPoolSize = NEGATIVE_CONNECTION_POOL_SIZE
             )
         }
