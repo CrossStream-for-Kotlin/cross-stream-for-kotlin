@@ -7,6 +7,7 @@ import pt.isel.leic.cs4k.rabbitmq.BrokerRabbit
 import pt.isel.leic.cs4k.rabbitmq.RabbitNode
 import pt.isel.leic.cs4k.redis.BrokerRedis
 import pt.isel.leic.cs4k.redis.RedisNode
+import pt.isel.leic.cs4k.utils.Environment
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -1201,9 +1202,9 @@ class BrokerTests {
         private const val TEST_EXECUTION_TIME_MILLIS = 60000L
 
         private val brokerConstructors: List<() -> Broker> = listOf(
-            { BrokerPostgreSQL("jdbc:postgresql://localhost:5432/db?user=dbuser&password=changeit") },
-            { BrokerRedis(RedisNode("localhost", 6379)) },
-            { BrokerRabbit(RabbitNode("localhost", 5672)) }
+            { BrokerPostgreSQL(Environment.getPostgreSqlDbUrl()) },
+            { BrokerRedis(RedisNode(Environment.getRedisHost(), Environment.getRedisPort())) },
+            { BrokerRabbit(RabbitNode(Environment.getRabbitHost(), Environment.getRabbitPort())) }
         )
 
         private fun getRandomBrokerInstance(brokerInstances: List<Broker>) = brokerInstances.random()

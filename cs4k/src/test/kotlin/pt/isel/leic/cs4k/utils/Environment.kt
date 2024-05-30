@@ -5,39 +5,76 @@ package pt.isel.leic.cs4k.utils
  */
 object Environment {
 
-    // Name of environment variable for PostgreSQL database URL.
+    // Keys for every system variable used.
     private const val KEY_POSTGRESQL_DB_URL = "POSTGRESQL_DB_URL"
-
-    // Name of environment variable for Redis host.
-    private const val KEY_REDIS_HOST = "REDIS_HOST"
-
-    // Name of environment variable for Redis port.
-    private const val KEY_REDIS_PORT = "REDIS_PORT"
-
-    /**
-     * Get the PostgreSQL database URL from the environment variable [KEY_POSTGRESQL_DB_URL].
-     *
-     * @return The PostgreSQL database URL.
-     * @throws Exception If the environment variable for the PostgreSQL database URL is missing.
-     */
-    fun getPostgreSQLDbUrl() = System.getenv(KEY_POSTGRESQL_DB_URL)
-        ?: throw Exception("Missing environment variable $KEY_POSTGRESQL_DB_URL.")
+    private const val KEY_REDIS_USR = "REDIS_USR"
+    private const val KEY_REDIS_PSW = "REDIS_PSW"
+    private const val KEY_REDIS_ADDRESS = "REDIS_ADDRESS"
+    private const val KEY_RABBIT_USR = "KEY_RABBIT_USR"
+    private const val KEY_RABBIT_PSW = "KEY_RABBIT_PSW"
+    private const val KEY_RABBIT_ADDRESS = "KEY_RABBIT_ADDRESS"
 
     /**
-     * Get the Redis host from the environment variable [KEY_REDIS_HOST].
-     *
-     * @return Redis host name.
-     * @throws Exception If the environment variable for the Redis host is missing.
+     * Obtains a system variable with a given key.
+     * @param key An environment variable key.
+     * @throws NullPointerException If no environment variable was found.
      */
-    fun getRedisHost() = System.getenv(KEY_REDIS_HOST)
-        ?: throw Exception("Missing environment variable $KEY_REDIS_HOST.")
+    private fun getEnvVar(key: String) = System.getenv(key)
+        ?: throw NullPointerException("Missing environment variable $key.")
 
     /**
-     * Get the Redis port from the environment variable [KEY_REDIS_PORT].
-     *
-     * @return Redis port number.
-     * @throws Exception If the environment variable for the Redis port is missing.
+     * Obtains the URL to access PostgreSQL database.
      */
-    fun getRedisPort() = System.getenv(KEY_REDIS_PORT)?.toInt()
-        ?: throw Exception("Missing environment variable $KEY_REDIS_PORT.")
+    fun getPostgreSqlDbUrl() = getEnvVar(KEY_POSTGRESQL_DB_URL)
+
+    /**
+     * Obtains the username to access Redis database.
+     */
+    fun getRedisUser() = getEnvVar(KEY_REDIS_USR)
+
+    /**
+     * Obtains the password to access Redis database.
+     */
+    fun getRedisPassword() = getEnvVar(KEY_REDIS_PSW)
+
+    /**
+     * Obtains the address of the Redis database.
+     */
+    fun getRedisAddress() = getEnvVar(KEY_REDIS_ADDRESS)
+
+    /**
+     * Obtains the host name of the Redis database.
+     */
+    fun getRedisHost() = getRedisAddress().split(":").first()
+
+    /**
+     * Obtains the port number of the Redis database.
+     */
+    fun getRedisPort() = getRedisAddress().split(":").last().toInt()
+
+    /**
+     * Obtains the username to access the RabbitMQ broker.
+     */
+    fun getRabbitUser() = getEnvVar(KEY_RABBIT_USR)
+
+    /**
+     * Obtains the password to access the RabbitMQ broker.
+     */
+    fun getRabbitPassword() = getEnvVar(KEY_RABBIT_PSW)
+
+    /**
+     * Obtains the address of the RabbitMQ broker.
+     */
+    fun getRabbitAddress() = getEnvVar(KEY_RABBIT_ADDRESS)
+
+    /**
+     * Obtains the host name of the RabbitMQ broker.
+     */
+    fun getRabbitHost() = getRabbitAddress().split(":").first()
+
+    /**
+     * Obtains the port number of the RabbitMQ broker.
+     */
+    fun getRabbitPort() = getRabbitAddress().split(":").last().toInt()
+
 }

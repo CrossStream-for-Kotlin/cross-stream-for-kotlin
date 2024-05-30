@@ -61,6 +61,11 @@ publishing {
     }
 }
 
+tasks.named("check") {
+    dependsOn("allUp")
+    finalizedBy("allDown")
+}
+
 /**
  * PostgreSQl DB related tasks.
  */
