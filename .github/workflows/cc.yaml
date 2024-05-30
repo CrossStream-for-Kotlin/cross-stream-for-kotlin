@@ -6,6 +6,7 @@ jobs:
   build:
     name: Continuous Check
     runs-on: ubuntu-latest
+    environment: CS4K Testing
     steps:
       - uses: actions/checkout@v2
       - name: Set up Java 17
