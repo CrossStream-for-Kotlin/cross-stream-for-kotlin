@@ -76,5 +76,4 @@ object Environment {
      * Obtains the port number of the RabbitMQ broker.
      */
     fun getRabbitPort() = getRabbitAddress().split(":").last().toInt()
-
 }
