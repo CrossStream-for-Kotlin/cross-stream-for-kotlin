@@ -31,10 +31,10 @@ import java.util.UUID
  * @property redisNode The Redis node.
  * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
  */
-// TODO("Support both communication to single Redis node and Redis cluster.")
 class BrokerRedis(
     private val redisNode: RedisNode,
-    private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE
+    private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
+    useCluster: Boolean = false
 ) : Broker {
 
     init {
@@ -56,19 +56,29 @@ class BrokerRedis(
 
     // Redis client.
     private val redisClient = retryExecutor.execute({ BrokerConnectionException() }, {
-        createRedisClient(redisNode)
-        // createRedisClusterClient()
+        if (useCluster) {
+            createRedisClusterClient(
+                List(6) {
+                    RedisNode("localhost", 7000 + it)
+                }
+            )
+        } else {
+            createRedisClient(redisNode)
+        }
     })
 
     // Connection to asynchronous subscribe, unsubscribe and publish.
     private val pubSubConnection = retryExecutor.execute({ BrokerConnectionException() }, {
-        redisClient.connectPubSub()
+        if (redisClient is RedisClient) redisClient.connectPubSub() else (redisClient as RedisClusterClient).connectPubSub()
     })
 
     // Connection pool.
     private val connectionPool = retryExecutor.execute({ BrokerConnectionException() }, {
-        createConnectionPool(dbConnectionPoolSize, redisClient)
-        // createClusterConnectionPool(dbConnectionPoolSize, redisClient)
+        if (useCluster) {
+            createClusterConnectionPool(dbConnectionPoolSize, redisClient as RedisClusterClient)
+        } else {
+            createConnectionPool(dbConnectionPoolSize, redisClient as RedisClient)
+        }
     })
 
     // Retry condition.
@@ -202,7 +212,12 @@ class BrokerRedis(
      */
     private fun getEventIdAndUpdateHistory(topic: String, message: String, isLast: Boolean): Long =
         connectionPool.borrowObject().use { conn ->
-            conn.sync().eval(
+            val syncCommands = if (conn is StatefulRedisClusterConnection) {
+                conn.sync()
+            } else {
+                (conn as StatefulRedisConnection).sync()
+            }
+            syncCommands.eval(
                 GET_EVENT_ID_AND_UPDATE_HISTORY_SCRIPT,
                 ScriptOutputType.INTEGER,
                 arrayOf(prefix + topic),
@@ -224,7 +239,12 @@ class BrokerRedis(
     private fun getLastEvent(topic: String): Event? =
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             val map = connectionPool.borrowObject().use { conn ->
-                conn.sync().hgetall(prefix + topic)
+                val syncCommands = if (conn is StatefulRedisClusterConnection) {
+                    conn.sync()
+                } else {
+                    (conn as StatefulRedisConnection).sync()
+                }
+                syncCommands.hgetall(prefix + topic)
             }
             val id = map[Event.Prop.ID.key]?.toLong()
             val message = map[Event.Prop.MESSAGE.key]
