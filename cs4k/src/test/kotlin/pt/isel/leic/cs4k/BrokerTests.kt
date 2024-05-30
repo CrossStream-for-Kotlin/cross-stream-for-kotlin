@@ -1,10 +1,12 @@
 package pt.isel.leic.cs4k
 
-import org.junit.jupiter.api.AfterAll
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.postgreSQL.BrokerPostgreSQL
-import pt.isel.leic.cs4k.utils.Environment
+import pt.isel.leic.cs4k.rabbitmq.BrokerRabbit
+import pt.isel.leic.cs4k.rabbitmq.RabbitNode
+import pt.isel.leic.cs4k.redis.BrokerRedis
+import pt.isel.leic.cs4k.redis.RedisNode
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -25,7 +27,52 @@ import kotlin.test.fail
 class BrokerTests {
 
     @Test
-    fun `new subscriber in 1 topic should receive the last message`() {
+    fun `testing each broker instance`() {
+        brokerConstructors.forEach { constructor ->
+            val brokerInstances = List(NUMBER_OF_BROKER_INSTANCES) { constructor() }
+            `simple tests`(brokerInstances)
+            `stress tests`(brokerInstances)
+            `shutdown tests` { constructor() }
+
+            brokerInstances.forEach { it.shutdown() }
+        }
+    }
+
+    fun `simple tests`(brokerInstances: List<Broker>) {
+        `new subscriber in 1 topic should receive the last message`(brokerInstances)
+        `new subscribers in 1 topic should receive the same last message even with several broker instances involved`(brokerInstances)
+        `new subscriber in 1 finished topic should receive the last message`(brokerInstances)
+        `new subscribers in 1 finished topic should receive the same last message even with several broker instances involved`(brokerInstances)
+        `1 subscriber in 1 topic waiting for 1 message`(brokerInstances)
+        `n subscribers in 1 topic waiting for 1 message with several broker instances involved`(brokerInstances)
+        `1 subscriber in 1 topic receiving n messages with several broker instances involved`(brokerInstances)
+        `n subscribers in 1 topic receiving n messages with several broker instances involved`(brokerInstances)
+        `n subscribers in n topics receiving n messages with several broker instances involved`(brokerInstances)
+        `subscriber unsubscribing should not receive message`(brokerInstances)
+        `subscribers unsubscribing should not receive message with several broker instances involved`(brokerInstances)
+        `should receive last published event on existing topic when new broker subscribes`(brokerInstances)
+        `n broker instance should successfully subscribe and receive past events from topics`(brokerInstances)
+    }
+
+    fun `stress tests`(brokerInstances: List<Broker>) {
+        `stress test with simultaneous publication of n messages to 1 topic with several broker instances involved`(brokerInstances)
+        `stress test with simultaneous publication of n messages to n topics with several broker instances involved`(brokerInstances)
+        `stress test with simultaneous subscription and publication of a message to n topics`(brokerInstances)
+        `consecutive subscription and unSubscriptions while periodic publication of a message`(brokerInstances)
+        `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message`(brokerInstances)
+        `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message in multiple topics`(brokerInstances)
+        `consecutive subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`(brokerInstances)
+        `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`(brokerInstances)
+        `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message in multiple topics and verify that all events are received in the correct order`(brokerInstances)
+    }
+
+    fun `shutdown tests`(constructor: () -> Broker) {
+        `cannot invoke method shutdown twice`(constructor)
+        `cannot invoke method publish after shutdown`(constructor)
+        `cannot invoke method subscribe after shutdown`(constructor)
+    }
+
+    fun `new subscriber in 1 topic should receive the last message`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val message = newRandomMessage()
@@ -59,8 +106,9 @@ class BrokerTests {
         unsubscribe()
     }
 
-    @Test
-    fun `new subscribers in 1 topic should receive the same last message even with several broker instances involved`() {
+    fun `new subscribers in 1 topic should receive the same last message even with several broker instances involved`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topic = newRandomTopic()
         val message = newRandomMessage()
@@ -76,7 +124,7 @@ class BrokerTests {
 
         // Act
         repeat(NUMBER_OF_SUBSCRIBERS) {
-            val unsubscribe = getRandomBrokerInstance().subscribe(
+            val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                 topic = topic,
                 handler = { event ->
                     // Assert [1]
@@ -98,8 +146,7 @@ class BrokerTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
-    @Test
-    fun `new subscriber in 1 finished topic should receive the last message`() {
+    fun `new subscriber in 1 finished topic should receive the last message`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val message = newRandomMessage()
@@ -133,8 +180,9 @@ class BrokerTests {
         unsubscribe()
     }
 
-    @Test
-    fun `new subscribers in 1 finished topic should receive the same last message even with several broker instances involved`() {
+    fun `new subscribers in 1 finished topic should receive the same last message even with several broker instances involved`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topic = newRandomTopic()
         val message = newRandomMessage()
@@ -150,7 +198,7 @@ class BrokerTests {
 
         // Act
         repeat(NUMBER_OF_SUBSCRIBERS) {
-            val unsubscribe = getRandomBrokerInstance().subscribe(
+            val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                 topic = topic,
                 handler = { event ->
                     // Assert [1]
@@ -172,8 +220,7 @@ class BrokerTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
-    @Test
-    fun `1 subscriber in 1 topic waiting for 1 message`() {
+    fun `1 subscriber in 1 topic waiting for 1 message`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val message = newRandomMessage()
@@ -206,8 +253,7 @@ class BrokerTests {
         unsubscribe()
     }
 
-    @Test
-    fun `n subscribers in 1 topic waiting for 1 message with several broker instances involved`() {
+    fun `n subscribers in 1 topic waiting for 1 message with several broker instances involved`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val message = newRandomMessage()
@@ -216,7 +262,7 @@ class BrokerTests {
         val unsubscribes = mutableListOf<() -> Unit>()
 
         repeat(NUMBER_OF_SUBSCRIBERS) {
-            val unsubscribe = getRandomBrokerInstance().subscribe(
+            val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                 topic = topic,
                 handler = { event ->
                     // Assert [1]
@@ -244,8 +290,7 @@ class BrokerTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
-    @Test
-    fun `1 subscriber in 1 topic receiving n messages with several broker instances involved`() {
+    fun `1 subscriber in 1 topic receiving n messages with several broker instances involved`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val messages = List(NUMBER_OF_MESSAGES) { newRandomMessage() }
@@ -263,7 +308,7 @@ class BrokerTests {
 
         // Act
         messages.forEach { msg ->
-            getRandomBrokerInstance().publish(
+            getRandomBrokerInstance(brokerInstances).publish(
                 topic = topic,
                 message = msg
             )
@@ -285,8 +330,7 @@ class BrokerTests {
         unsubscribe()
     }
 
-    @Test
-    fun `n subscribers in 1 topic receiving n messages with several broker instances involved`() {
+    fun `n subscribers in 1 topic receiving n messages with several broker instances involved`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val messages = List(NUMBER_OF_MESSAGES) { newRandomMessage() }
@@ -296,7 +340,7 @@ class BrokerTests {
         val eventsReceived = ConcurrentLinkedQueue<Event>()
 
         repeat(NUMBER_OF_SUBSCRIBERS) {
-            val unsubscribe = getRandomBrokerInstance().subscribe(
+            val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                 topic = topic,
                 handler = { event ->
                     eventsReceived.add(event)
@@ -308,7 +352,7 @@ class BrokerTests {
 
         // Act
         messages.forEach { message ->
-            getRandomBrokerInstance().publish(
+            getRandomBrokerInstance(brokerInstances).publish(
                 topic = topic,
                 message = message
             )
@@ -333,8 +377,7 @@ class BrokerTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
-    @Test
-    fun `n subscribers in n topics receiving n messages with several broker instances involved`() {
+    fun `n subscribers in n topics receiving n messages with several broker instances involved`(brokerInstances: List<Broker>) {
         // Arrange
         val topicsAndMessages = (1..NUMBER_OF_TOPICS).associate {
             newRandomTopic() to List(NUMBER_OF_MESSAGES) { newRandomMessage() }
@@ -347,7 +390,7 @@ class BrokerTests {
         // Act
         topicsAndMessages.forEach { entry ->
             repeat(NUMBER_OF_SUBSCRIBERS) {
-                val unsubscribe = getRandomBrokerInstance().subscribe(
+                val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                     topic = entry.key,
                     handler = { event ->
                         eventsReceived.add(event)
@@ -360,7 +403,7 @@ class BrokerTests {
 
         topicsAndMessages.forEach { entry ->
             entry.value.forEach { message ->
-                getRandomBrokerInstance().publish(
+                getRandomBrokerInstance(brokerInstances).publish(
                     topic = entry.key,
                     message = message
                 )
@@ -384,8 +427,7 @@ class BrokerTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
-    @Test
-    fun `subscriber unsubscribing should not receive message`() {
+    fun `subscriber unsubscribing should not receive message`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val message = newRandomMessage()
@@ -414,8 +456,7 @@ class BrokerTests {
         assertTrue(reachedZero)
     }
 
-    @Test
-    fun `subscribers unsubscribing should not receive message with several broker instances involved`() {
+    fun `subscribers unsubscribing should not receive message with several broker instances involved`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val message = newRandomMessage()
@@ -424,7 +465,7 @@ class BrokerTests {
 
         // Act
         repeat(NUMBER_OF_SUBSCRIBERS) {
-            val unsubscribe = getRandomBrokerInstance().subscribe(topic) { _ ->
+            val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(topic) { _ ->
                 // Assert
                 fail("Event was emitted, however it should have unsubscribed.")
             }
@@ -445,8 +486,77 @@ class BrokerTests {
         assertTrue(reachedZero)
     }
 
-    @Test
-    fun `stress test with simultaneous publication of n messages to 1 topic with several broker instances involved`() {
+    fun `should receive last published event on existing topic when new broker subscribes`(brokerInstances: List<Broker>) {
+        // Arrange
+        val topic = newRandomTopic()
+        val message = newRandomMessage()
+
+        var eventReceived = ""
+        val latch = CountDownLatch(2)
+
+        getRandomBrokerInstance(brokerInstances).publish(topic, message)
+
+        Thread.sleep(5000)
+
+        // Act
+        getRandomBrokerInstance(brokerInstances).subscribe(topic) { event ->
+            // Assert
+            eventReceived = message
+            assertEquals(topic, event.topic)
+            assertEquals(FIRST_EVENT_ID, event.id)
+            assertEquals(message, event.message)
+            assertFalse(event.isLast)
+            latch.countDown()
+        }
+
+        latch.await(1000, TimeUnit.MILLISECONDS)
+
+        // Assert
+        assertEquals(eventReceived, message)
+    }
+
+    fun `n broker instance should successfully subscribe and receive past events from topics`(brokerInstances: List<Broker>) {
+        // Arrange
+
+        val topicsAndMessage = (1..NUMBER_OF_TOPICS).associate {
+            newRandomTopic() to newRandomMessage()
+        }
+        topicsAndMessage.forEach {
+            getRandomBrokerInstance(brokerInstances).publish(it.key, it.value)
+        }
+
+        Thread.sleep(10000)
+
+        // ACT
+        val latch = CountDownLatch(topicsAndMessage.size)
+        val receivedMessages = mutableListOf<String>()
+        val unsubscribes = mutableListOf<() -> Unit>()
+        topicsAndMessage.forEach { entry ->
+            val un = getRandomBrokerInstance(brokerInstances).subscribe(entry.key) { event ->
+                // Assert
+                if (event.topic == entry.key) {
+                    receivedMessages.add(event.message)
+                    latch.countDown()
+                }
+            }
+            unsubscribes.add(un)
+        }
+
+        latch.await()
+
+        assertTrue(latch.await(10000, TimeUnit.MILLISECONDS))
+
+        // Assert
+        unsubscribes.forEach { it() }
+        assertEquals(receivedMessages.toSet().toList().size, topicsAndMessage.map { it.value }.size)
+        receivedMessages.toSet().toList().forEach {
+            assertTrue(topicsAndMessage.map { pair -> pair.value }.contains(it))
+        }
+    }
+
+    fun `stress test with simultaneous publication of n messages to 1 topic with several broker instances involved`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topic = newRandomTopic()
         val messages = List(NUMBER_OF_MESSAGES) { newRandomMessage() }
@@ -458,7 +568,7 @@ class BrokerTests {
         val eventsReceived = ConcurrentLinkedQueue<Event>()
 
         repeat(NUMBER_OF_SUBSCRIBERS) {
-            val unsubscribe = getRandomBrokerInstance().subscribe(
+            val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                 topic = topic,
                 handler = { event ->
                     eventsReceived.add(event)
@@ -472,7 +582,7 @@ class BrokerTests {
         messages.forEach { message ->
             val th = Thread {
                 try {
-                    getRandomBrokerInstance().publish(
+                    getRandomBrokerInstance(brokerInstances).publish(
                         topic = topic,
                         message = message
                     )
@@ -502,8 +612,9 @@ class BrokerTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
-    @Test
-    fun `stress test with simultaneous publication of n messages to n topics with several broker instances involved`() {
+    fun `stress test with simultaneous publication of n messages to n topics with several broker instances involved`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topicsAndMessages = (1..NUMBER_OF_TOPICS).associate {
             newRandomTopic() to List(NUMBER_OF_MESSAGES) { newRandomMessage() }
@@ -517,7 +628,7 @@ class BrokerTests {
 
         topicsAndMessages.forEach { entry ->
             repeat(NUMBER_OF_SUBSCRIBERS) {
-                val unsubscribe = getRandomBrokerInstance().subscribe(
+                val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                     topic = entry.key,
                     handler = { event ->
                         eventsReceived.add(event)
@@ -533,7 +644,7 @@ class BrokerTests {
             entry.value.forEach { message ->
                 val th = Thread {
                     try {
-                        getRandomBrokerInstance().publish(
+                        getRandomBrokerInstance(brokerInstances).publish(
                             topic = entry.key,
                             message = message
                         )
@@ -569,8 +680,7 @@ class BrokerTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
-    @Test
-    fun `stress test with simultaneous subscription and publication of a message to n topics`() {
+    fun `stress test with simultaneous subscription and publication of a message to n topics`(brokerInstances: List<Broker>) {
         // Arrange
         val topicsAndMessages = List(NUMBER_OF_TOPICS) { Pair(newRandomTopic(), newRandomMessage()) }
 
@@ -584,7 +694,7 @@ class BrokerTests {
         topicsAndMessages.forEach { pair ->
             val th = Thread {
                 try {
-                    val unsubscribe = getRandomBrokerInstance().subscribe(
+                    val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                         topic = pair.first,
                         handler = { event ->
                             eventsReceived.add(event)
@@ -593,7 +703,7 @@ class BrokerTests {
                     )
                     unsubscribes.add(unsubscribe)
 
-                    getRandomBrokerInstance().publish(
+                    getRandomBrokerInstance(brokerInstances).publish(
                         topic = pair.first,
                         message = pair.second
                     )
@@ -623,8 +733,7 @@ class BrokerTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
-    @Test
-    fun `consecutive subscription and unSubscriptions while periodic publication of a message`() {
+    fun `consecutive subscription and unSubscriptions while periodic publication of a message`(brokerInstances: List<Broker>) {
         // Arrange
         val topic = newRandomTopic()
         val messages = ConcurrentLinkedQueue<String>()
@@ -638,7 +747,7 @@ class BrokerTests {
                             messages.add(it)
                         }
                         .also {
-                            getRandomBrokerInstance().publish(
+                            getRandomBrokerInstance(brokerInstances).publish(
                                 topic = topic,
                                 message = it
                             )
@@ -654,7 +763,7 @@ class BrokerTests {
         while (true) {
             val events = ConcurrentLinkedQueue<Event>()
             val latch = CountDownLatch(2)
-            val unsubscribe = getRandomBrokerInstance().subscribe(
+            val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                 topic = topic,
                 handler = { event ->
                     events.add(event)
@@ -678,8 +787,9 @@ class BrokerTests {
         publisherThread.join()
     }
 
-    @Test
-    fun `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message`() {
+    fun `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topic = newRandomTopic()
         val messages = ConcurrentLinkedQueue<String>()
@@ -695,7 +805,7 @@ class BrokerTests {
                     newRandomMessage()
                         .also { messages.offer(it) }
                         .also {
-                            getRandomBrokerInstance().publish(
+                            getRandomBrokerInstance(brokerInstances).publish(
                                 topic = topic,
                                 message = it
                             )
@@ -713,7 +823,7 @@ class BrokerTests {
                 while (true) {
                     val events = ConcurrentLinkedQueue<Event>()
                     val latch = CountDownLatch(2)
-                    val unsubscribe = getRandomBrokerInstance().subscribe(
+                    val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                         topic = topic,
                         handler = { event ->
                             events.add(event)
@@ -751,8 +861,9 @@ class BrokerTests {
         if (errors.isNotEmpty()) throw errors.peek()
     }
 
-    @Test
-    fun `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message in multiple topics`() {
+    fun `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message in multiple topics`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topicsAndMessages = (1..NUMBER_OF_TOPICS).associate {
             newRandomTopic() to ConcurrentLinkedQueue<String>()
@@ -771,7 +882,7 @@ class BrokerTests {
                         newRandomMessage()
                             .also { entry.value.offer(it) }
                             .also {
-                                getRandomBrokerInstance().publish(
+                                getRandomBrokerInstance(brokerInstances).publish(
                                     topic = entry.key,
                                     message = it
                                 )
@@ -791,7 +902,7 @@ class BrokerTests {
                     while (true) {
                         val events = ConcurrentLinkedQueue<Event>()
                         val latch = CountDownLatch(2)
-                        val unsubscribe = getRandomBrokerInstance().subscribe(
+                        val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                             topic = entry.key,
                             handler = { event ->
                                 events.add(event)
@@ -832,8 +943,9 @@ class BrokerTests {
         if (errors.isNotEmpty()) throw errors.peek()
     }
 
-    @Test
-    fun `consecutive subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`() {
+    fun `consecutive subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topic = newRandomTopic()
         val messages = ConcurrentLinkedQueue<String>()
@@ -845,7 +957,7 @@ class BrokerTests {
                         messages.add(it)
                     }
                     .also {
-                        getRandomBrokerInstance().publish(
+                        getRandomBrokerInstance(brokerInstances).publish(
                             topic = topic,
                             message = it
                         )
@@ -860,7 +972,7 @@ class BrokerTests {
         val startTimeMillis = System.currentTimeMillis()
         while (true) {
             val latch = CountDownLatch(1)
-            val unsubscribe = getRandomBrokerInstance().subscribe(
+            val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                 topic = topic,
                 handler = { event ->
                     events.add(event)
@@ -886,8 +998,9 @@ class BrokerTests {
         assertEquals(messages.toList(), events.map { it.message }.toSet().toList())
     }
 
-    @Test
-    fun `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`() {
+    fun `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topic = newRandomTopic()
         val messages = ConcurrentLinkedQueue<String>()
@@ -901,7 +1014,7 @@ class BrokerTests {
                 newRandomMessage()
                     .also { messages.offer(it) }
                     .also {
-                        getRandomBrokerInstance().publish(
+                        getRandomBrokerInstance(brokerInstances).publish(
                             topic = topic,
                             message = it
                         )
@@ -919,7 +1032,7 @@ class BrokerTests {
                     val events = ConcurrentLinkedQueue<Event>()
                     while (true) {
                         val latch = CountDownLatch(1)
-                        val unsubscribe = getRandomBrokerInstance().subscribe(
+                        val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                             topic = topic,
                             handler = { event ->
                                 events.add(event)
@@ -959,8 +1072,9 @@ class BrokerTests {
         if (errors.isNotEmpty()) throw errors.peek()
     }
 
-    @Test
-    fun `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message in multiple topics and verify that all events are received in the correct order`() {
+    fun `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message in multiple topics and verify that all events are received in the correct order`(
+        brokerInstances: List<Broker>
+    ) {
         // Arrange
         val topicsAndMessages = (1..NUMBER_OF_TOPICS).associate {
             newRandomTopic() to ConcurrentLinkedQueue<String>()
@@ -979,7 +1093,7 @@ class BrokerTests {
                             entry.value.offer(it)
                         }
                         .also {
-                            getRandomBrokerInstance().publish(
+                            getRandomBrokerInstance(brokerInstances).publish(
                                 topic = entry.key,
                                 message = it
                             )
@@ -998,7 +1112,7 @@ class BrokerTests {
                     val events = ConcurrentLinkedQueue<Event>()
                     while (true) {
                         val latch = CountDownLatch(1)
-                        val unsubscribe = getRandomBrokerInstance().subscribe(
+                        val unsubscribe = getRandomBrokerInstance(brokerInstances).subscribe(
                             topic = entry.key,
                             handler = { event ->
                                 events.add(event)
@@ -1038,8 +1152,7 @@ class BrokerTests {
         if (errors.isNotEmpty()) throw errors.peek()
     }
 
-    @Test
-    fun `cannot invoke method shutdown twice`() {
+    fun `cannot invoke method shutdown twice`(createBrokerInstance: () -> Broker) {
         // Arrange
         val broker = createBrokerInstance()
         broker.shutdown()
@@ -1051,8 +1164,7 @@ class BrokerTests {
         }
     }
 
-    @Test
-    fun `cannot invoke method subscribe after shutdown`() {
+    fun `cannot invoke method subscribe after shutdown`(createBrokerInstance: () -> Broker) {
         // Arrange
         val broker = createBrokerInstance()
         broker.shutdown()
@@ -1064,8 +1176,7 @@ class BrokerTests {
         }
     }
 
-    @Test
-    fun `cannot invoke method publish after shutdown`() {
+    fun `cannot invoke method publish after shutdown`(createBrokerInstance: () -> Broker) {
         // Arrange
         val broker = createBrokerInstance()
         broker.shutdown()
@@ -1089,26 +1200,15 @@ class BrokerTests {
         private const val SUBSCRIBE_TIMEOUT_MILLIS = 60000L
         private const val TEST_EXECUTION_TIME_MILLIS = 60000L
 
-        private fun createBrokerInstance() =
-            // - PostgreSQL
-            BrokerPostgreSQL(Environment.getPostgreSQLDbUrl())
+        private val brokerConstructors: List<() -> Broker> = listOf(
+            { BrokerPostgreSQL("jdbc:postgresql://localhost:5432/db?user=dbuser&password=changeit") },
+            { BrokerRedis(RedisNode("localhost", 6379)) },
+            { BrokerRabbit(RabbitNode("localhost", 5672)) },
+        )
 
-        // - Redis
-        // BrokerRedis(RedisNode(Environment.getRedisHost(), Environment.getRedisPort()))
-
-        private val brokerInstances = List(NUMBER_OF_BROKER_INSTANCES) { createBrokerInstance() }
-
-        private fun getRandomBrokerInstance() = brokerInstances.random()
-
+        private fun getRandomBrokerInstance(brokerInstances: List<Broker>) = brokerInstances.random()
         private fun generateRandom() = abs(Random.nextLong())
-
         private fun newRandomTopic() = "topic${generateRandom()}"
         private fun newRandomMessage() = "message${generateRandom()}"
-
-        @JvmStatic
-        @AfterAll
-        fun cleanUp() {
-            brokerInstances.forEach { it.shutdown() }
-        }
     }
 }

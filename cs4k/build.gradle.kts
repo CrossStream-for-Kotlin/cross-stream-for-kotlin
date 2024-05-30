@@ -16,10 +16,10 @@ repositories {
 dependencies {
 
     // For JSON serialization and deserialization
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.1")
 
     // For coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
     // For Postgresql
     implementation("org.postgresql:postgresql:42.7.0")
@@ -27,13 +27,16 @@ dependencies {
     // For HikariCP
     implementation("com.zaxxer:HikariCP:5.1.0")
 
+    // For RabbitMQ
+    implementation("com.rabbitmq:amqp-client:5.21.0")
+
     // For Redis
-    implementation("redis.clients:jedis:5.1.0")
+    implementation("redis.clients:jedis:5.1.3")
     implementation("io.lettuce:lettuce-core:6.3.2.RELEASE")
 
     // For logging
-    implementation("org.slf4j:slf4j-api:1.7.36")
-    implementation("org.slf4j:slf4j-simple:2.0.0-alpha7")
+    implementation("org.slf4j:slf4j-api:2.0.12")
+    implementation("org.slf4j:slf4j-simple:2.0.13")
 
     // For automated tests
     testImplementation(kotlin("test"))
@@ -82,5 +85,27 @@ task<Exec>("redisUp") {
 }
 
 task<Exec>("redisDown") {
+    commandLine("docker-compose", "down")
+}
+
+/**
+ * RabbitMQ related tasks.
+ */
+task<Exec>("rabbitUp") {
+    commandLine("docker-compose", "up", "-d", "--build", "rabbit")
+}
+
+task<Exec>("rabbitDown") {
+    commandLine("docker-compose", "down")
+}
+
+/**
+ * Test task, starting all containers.
+ */
+task<Exec>("allUp") {
+    commandLine("docker-compose", "up", "-d")
+}
+
+task<Exec>("allDown") {
     commandLine("docker-compose", "down")
 }

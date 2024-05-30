@@ -20,6 +20,12 @@ services:
       ports:
         - "6379:6379"
 
+  rabbit-mq:
+      container_name: rabbit-mq
+      image: rabbitmq:alpine
+      ports:
+        - "5672:5672"
+
   # Just a machine running ubuntu, with 'dig' installed so that we can observe the docker compose environment.
   ubuntu:
     container_name: ubuntu

@@ -1,0 +1,155 @@
+version: "3.3"
+
+services:
+  postgres:
+    container_name: postgres
+    build:
+      context: .
+      dockerfile: ./tests/Dockerfile-postgres
+    environment:
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=changeit
+      - POSTGRES_DB=db
+    ports:
+      - "5432:5432"
+
+  spring-service:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-spring
+    depends_on:
+      - postgres
+      - rabbit-mq1
+      - rabbit-mq2
+      - rabbit-mq3
+      - rabbit-mq4
+      - rabbit-mq5
+      ##- redis
+    command: ["scripts/wait-for-rabbitmq.sh", "rabbit-mq", "5672","scripts/wait-for-postgres.sh", "localhost"]
+    environment:
+      PORT: 8080
+      POSTGRESQL_DB_URL: "jdbc:postgresql://postgres:5432/db?user=dbuser&password=changeit"
+
+  nginx:
+    container_name: nginx
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-nginx
+    ports:
+      - "8088:8088"
+    depends_on:
+      - spring-service
+
+  # Just a machine running ubuntu, with 'dig' installed so that we can observe the docker compose environment.
+  ubuntu:
+    container_name: ubuntu
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-ubuntu
+    tty: true
+
+
+    # Rabbit single node
+  rabbit-mq:
+    container_name: rabbit-mq
+    image: rabbitmq:alpine
+    hostname: rabbit-mq1
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+
+  # Rabbit cluster
+  rabbit-mq1:
+    container_name: rabbit-mq1
+    image: rabbitmq:alpine
+    hostname: rabbit-mq1
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    volumes:
+      - ./tests/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    networks:
+      - rabbitmq-cluster
+
+  rabbit-mq2:
+    container_name: rabbit-mq2
+    image: rabbitmq:alpine
+    hostname: rabbit-mq2
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    volumes:
+      - ./tests/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    networks:
+       - rabbitmq-cluster
+    depends_on:
+      - rabbit-mq1
+
+  rabbit-mq3:
+    container_name: rabbit-mq3
+    image: rabbitmq:alpine
+    hostname: rabbit-mq3
+    ports:
+      - "5674:5672"
+      - "15674:15672"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    volumes:
+      - ./tests/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    networks:
+      - rabbitmq-cluster
+    depends_on:
+      - rabbit-mq1
+
+  rabbit-mq4:
+    container_name: rabbit-mq4
+    image: rabbitmq:alpine
+    hostname: rabbit-mq4
+    ports:
+      - "5675:5672"
+      - "15675:15672"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    volumes:
+      - ./tests/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    networks:
+      - rabbitmq-cluster
+    depends_on:
+      - rabbit-mq1
+
+  rabbit-mq5:
+    container_name: rabbit-mq5
+    image: rabbitmq:alpine
+    hostname: rabbit-mq5
+    ports:
+      - "5676:5672"
+      - "15676:15672"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    volumes:
+      - ./tests/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    networks:
+      - rabbitmq-cluster
+    depends_on:
+      - rabbit-mq1
+
+networks:
+  rabbitmq-cluster:
+    driver: bridge
