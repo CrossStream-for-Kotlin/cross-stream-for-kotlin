@@ -1203,7 +1203,7 @@ class BrokerTests {
         private val brokerConstructors: List<() -> Broker> = listOf(
             { BrokerPostgreSQL("jdbc:postgresql://localhost:5432/db?user=dbuser&password=changeit") },
             { BrokerRedis(RedisNode("localhost", 6379)) },
-            { BrokerRabbit(RabbitNode("localhost", 5672)) },
+            { BrokerRabbit(RabbitNode("localhost", 5672)) }
         )
 
         private fun getRandomBrokerInstance(brokerInstances: List<Broker>) = brokerInstances.random()
