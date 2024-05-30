@@ -10,9 +10,9 @@ object Environment {
     private const val KEY_REDIS_USR = "REDIS_USR"
     private const val KEY_REDIS_PSW = "REDIS_PSW"
     private const val KEY_REDIS_ADDRESS = "REDIS_ADDRESS"
-    private const val KEY_RABBIT_USR = "KEY_RABBIT_USR"
-    private const val KEY_RABBIT_PSW = "KEY_RABBIT_PSW"
-    private const val KEY_RABBIT_ADDRESS = "KEY_RABBIT_ADDRESS"
+    private const val KEY_RABBIT_USR = "RABBIT_USR"
+    private const val KEY_RABBIT_PSW = "RABBIT_PSW"
+    private const val KEY_RABBIT_ADDRESS = "RABBIT_ADDRESS"
 
     /**
      * Obtains a system variable with a given key.
