@@ -1,7 +1,5 @@
 package pt.isel.leic.cs4k.independentBroker
 
-import cs4k.prototype.broker.option3.Neighbor
-import cs4k.prototype.broker.option3.serviceDiscovery.DNSServiceDiscovery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +28,7 @@ import pt.isel.leic.cs4k.independentBroker.network.acceptSuspend
 import pt.isel.leic.cs4k.independentBroker.network.connectSuspend
 import pt.isel.leic.cs4k.independentBroker.network.readSuspend
 import pt.isel.leic.cs4k.independentBroker.network.writeSuspend
+import pt.isel.leic.cs4k.independentBroker.serviceDiscovery.DNSServiceDiscovery
 import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -318,10 +317,6 @@ class BrokerOption3(
     private fun unsubscribe(topic: String, subscriber: Subscriber) {
         associatedSubscribers.removeIf(topic, { sub -> sub.id == subscriber.id })
         logger.info("[{}] unsubscribe topic '{}' id '{}'", selfIp, topic, subscriber.id)
-    }
-
-    fun toTest() {
-        logger.info("The neighbiors of ip {} are {}", selfIp, neighbors.getAll().forEach { it.inetAddress })
     }
 
     private companion object {

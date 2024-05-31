@@ -1,9 +1,9 @@
-package cs4k.prototype.broker.option3.serviceDiscovery
+package pt.isel.leic.cs4k.independentBroker.serviceDiscovery
 
-import cs4k.prototype.broker.option3.Neighbor
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.common.BrokerException
 import pt.isel.leic.cs4k.common.RetryExecutor
+import pt.isel.leic.cs4k.independentBroker.Neighbor
 import pt.isel.leic.cs4k.independentBroker.network.Neighbors
 import java.lang.Thread.sleep
 import java.net.Inet4Address

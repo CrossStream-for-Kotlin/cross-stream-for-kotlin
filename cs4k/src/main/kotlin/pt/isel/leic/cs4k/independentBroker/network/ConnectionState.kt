@@ -1,5 +1,7 @@
 package pt.isel.leic.cs4k.independentBroker.network
 
+import pt.isel.leic.cs4k.independentBroker.Neighbor
+
 /**
  * Represents the state of a connection with a [Neighbor].
  *

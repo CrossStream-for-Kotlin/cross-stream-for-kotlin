@@ -1,4 +1,4 @@
-package cs4k.prototype.broker.option3
+package pt.isel.leic.cs4k.independentBroker
 
 import pt.isel.leic.cs4k.independentBroker.network.ConnectionState
 import pt.isel.leic.cs4k.independentBroker.network.InboundConnection
