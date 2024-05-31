@@ -1,0 +1,27 @@
+version: "3.3"
+
+services:
+  spring-service:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-spring
+    environment:
+      SERVICE_NAME: "spring-service"
+
+  nginx:
+    container_name: nginx
+    build:
+      context: ..
+      dockerfile: ./jvm/tests/Dockerfile-nginx
+    ports:
+      - "8088:8088"
+    depends_on:
+      - spring-service
+
+  # Just a machine running ubuntu, with 'dig' installed so that we can observe the docker compose environment.
+  ubuntu:
+    container_name: ubuntu
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-ubuntu
+    tty: true

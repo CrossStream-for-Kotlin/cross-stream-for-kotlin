@@ -24,7 +24,6 @@ services:
       - rabbit-mq3
       - rabbit-mq4
       - rabbit-mq5
-      ##- redis
     command: ["scripts/wait-for-rabbitmq.sh", "rabbit-mq", "5672","scripts/wait-for-postgres.sh", "localhost"]
     environment:
       PORT: 8080

@@ -146,5 +146,25 @@ task<Exec>("demoOption2RabbitComposeDown") {
     commandLine("docker-compose", "-f", "docker-compose-demo-option2-rabbit.yaml", "down")
 }
 
+// Option 3
+
+task<Exec>("demoOption3ComposeUp") {
+    commandLine(
+        "docker-compose",
+        "-f",
+        "docker-compose-demo-option3.yaml",
+        "up",
+        "--build",
+        "--force-recreate",
+        "--scale",
+        "spring-service=3"
+    )
+    dependsOn("extractUberJar")
+}
+
+task<Exec>("demoOption3ComposeDown") {
+    commandLine("docker-compose", "-f", "docker-compose-demo-option3.yaml", "down")
+}
+
 // Scale up/down:
 //  - docker-compose -f <DOCKER_COMPOSE_YAML> up --scale spring-service=<NUMBER_OF_INSTANCES> --no-recreate

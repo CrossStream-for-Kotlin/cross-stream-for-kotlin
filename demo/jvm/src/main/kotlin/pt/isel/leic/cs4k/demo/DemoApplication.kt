@@ -3,6 +3,7 @@ package pt.isel.leic.cs4k.demo
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
+import pt.isel.leic.cs4k.independentBroker.BrokerIndependent
 import pt.isel.leic.cs4k.postgreSQL.BrokerPostgreSQL
 import pt.isel.leic.cs4k.redis.BrokerRedis
 import pt.isel.leic.cs4k.redis.RedisNode
@@ -21,6 +22,12 @@ class DemoApplication {
             Environment.getRedisHost(),
             Environment.getRedisPort()
         )
+    )
+
+    // @Bean
+    fun brokerIndependent() = BrokerIndependent(
+        Environment.getHostname()
+        /* Environment.getServiceName() */
     )
 }
 

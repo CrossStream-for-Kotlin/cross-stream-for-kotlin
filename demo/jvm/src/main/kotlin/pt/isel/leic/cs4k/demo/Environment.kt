@@ -14,6 +14,12 @@ object Environment {
     // Name of environment variable for Redis port.
     private const val KEY_REDIS_PORT = "REDIS_PORT"
 
+    // Name of environment variable for hostname.
+    private const val KEY_HOSTNAME = "HOSTNAME"
+
+    // Name of environment variable for service name.
+    private const val KEY_SERVICE_NAME = "SERVICE_NAME"
+
     /**
      * Get the PostgreSQL database URL from the environment variable [KEY_POSTGRESQL_DB_URL].
      *
@@ -40,4 +46,22 @@ object Environment {
      */
     fun getRedisPort() = System.getenv(KEY_REDIS_PORT)?.toInt()
         ?: throw Exception("Missing environment variable $KEY_REDIS_PORT.")
+
+    /**
+     * Get the hostname from the environment variable [KEY_HOSTNAME].
+     *
+     * @return The hostname.
+     * @throws Exception If the environment variable for the hostname is missing.
+     */
+    fun getHostname() = System.getenv(KEY_HOSTNAME)
+        ?: throw Exception("Missing environment variable $KEY_HOSTNAME.")
+
+    /**
+     * Get the service name from the environment variable [KEY_SERVICE_NAME].
+     *
+     * @return The service name.
+     * @throws Exception If the environment variable for the service name is missing.
+     */
+    fun getServiceName() = System.getenv(KEY_SERVICE_NAME)
+        ?: throw Exception("Missing environment variable $KEY_SERVICE_NAME.")
 }
