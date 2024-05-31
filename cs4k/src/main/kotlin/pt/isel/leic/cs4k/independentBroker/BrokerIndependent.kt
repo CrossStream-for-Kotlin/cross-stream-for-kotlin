@@ -48,6 +48,7 @@ import kotlin.time.Duration
  *
  * @property hostname The hostname.
  * @property serviceName The service name.
+ * If the service name is provided, DNSServiceDiscovery is used, otherwise MulticastServiceDiscovery is used.
  *
  * TODO("Save the latest events for each topic and make them available to new subscribers")
  * TODO("Fix neighbors scale down errors")
