@@ -3,7 +3,7 @@ plugins {
     kotlin("jvm") version "1.9.23"
     id("org.jlleitschuh.gradle.ktlint") version "11.6.0"
 
-    `maven-publish`
+    `maven-publish` // gradle task 'publishToMavenLocal'
 }
 
 group = "pt.isel.leic.cs4k"
@@ -35,8 +35,7 @@ dependencies {
     implementation("io.lettuce:lettuce-core:6.3.2.RELEASE")
 
     // For logging
-    implementation("org.slf4j:slf4j-api:2.0.12")
-    implementation("org.slf4j:slf4j-simple:2.0.13")
+    implementation("ch.qos.logback:logback-classic:1.5.6")
 
     // For automated tests
     testImplementation(kotlin("test"))
