@@ -3,7 +3,7 @@ package pt.isel.leic.cs4k.independentBroker.serviceDiscovery
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.common.BrokerException
 import pt.isel.leic.cs4k.common.RetryExecutor
-import pt.isel.leic.cs4k.independentBroker.Neighbor
+import pt.isel.leic.cs4k.independentBroker.network.Neighbor
 import pt.isel.leic.cs4k.independentBroker.network.Neighbors
 import java.lang.Thread.sleep
 import java.net.DatagramPacket
@@ -25,7 +25,7 @@ class MulticastServiceDiscovery(
     private val neighbors: Neighbors,
     private val selfIp: String,
     private val sendDatagramPacketAgainTime: Long = DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME
-) {
+) : ServiceDiscovery {
 
     // Multicast inet address (IP).
     private val multicastInetAddress = InetAddress.getByName(MULTICAST_IP)
@@ -57,11 +57,6 @@ class MulticastServiceDiscovery(
         })
     }
 
-    init {
-        listenMulticastSocketThread.start()
-        periodicAnnounceExistenceToNeighborsThread.start()
-    }
-
     /**
      * Join the multicast group.
      *
@@ -89,18 +84,9 @@ class MulticastServiceDiscovery(
                 val receivedDatagramPacket = DatagramPacket(inboundBuffer, inboundBuffer.size)
                 multicastSocket.receive(receivedDatagramPacket)
                 val remoteInetAddress = receivedDatagramPacket.address
-                val message = String(receivedDatagramPacket.data, 0, receivedDatagramPacket.length)
-                val parts = message.split(":")
-                val remoteIp = parts[0]
                 if (remoteInetAddress.hostAddress != selfIp) {
-                    neighbors.add(
-                        Neighbor(
-                            InetAddress.getByName(remoteIp)
-                        )
-                    )
-                    logger.info("[{}] <++ '{}'", selfIp, remoteIp)
-                } else {
-                    logger.info("[{}] ignoring packet from self", selfIp)
+                    neighbors.add(Neighbor(remoteInetAddress))
+                    logger.info("[{}] <++ '{}'", selfIp, remoteInetAddress)
                 }
             } catch (ex: Exception) {
                 multicastSocket.leaveGroup(multicastInetSocketAddress, networkInterface)
@@ -123,8 +109,9 @@ class MulticastServiceDiscovery(
     private fun periodicAnnounceExistenceToNeighbors(multicastSocket: MulticastSocket) {
         while (!periodicAnnounceExistenceToNeighborsThread.isInterrupted) {
             try {
-                val messageBytes = "$selfIp".toByteArray()
+                val messageBytes = MESSAGE.toByteArray()
                 val datagramPacket = DatagramPacket(messageBytes, messageBytes.size, multicastInetSocketAddress)
+
                 multicastSocket.send(datagramPacket)
                 logger.info("[{}] ++> '{}'", selfIp, selfIp)
                 sleep(sendDatagramPacketAgainTime)
@@ -157,10 +144,12 @@ class MulticastServiceDiscovery(
         throw Exception("[$selfIp] There is no active network interface that supports multicast!")
     }
 
-    /**
-     * Stop service discovery.
-     */
-    fun stop() {
+    override fun start() {
+        listenMulticastSocketThread.start()
+        periodicAnnounceExistenceToNeighborsThread.start()
+    }
+
+    override fun stop() {
         listenMulticastSocketThread.interrupt()
         periodicAnnounceExistenceToNeighborsThread.interrupt()
     }
@@ -168,6 +157,7 @@ class MulticastServiceDiscovery(
     private companion object {
         private val logger = LoggerFactory.getLogger(MulticastServiceDiscovery::class.java)
 
+        private const val MESSAGE = "HELLO"
         private const val MULTICAST_IP = "228.5.6.7"
         private const val MULTICAST_PORT = 6789
         private const val INBOUND_BUFFER_SIZE = 1024

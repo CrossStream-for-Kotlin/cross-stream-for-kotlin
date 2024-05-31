@@ -1,6 +1,5 @@
 package pt.isel.leic.cs4k.independentBroker.network
 
-import pt.isel.leic.cs4k.independentBroker.Neighbor
 import java.net.InetAddress
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
