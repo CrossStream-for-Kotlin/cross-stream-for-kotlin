@@ -23,15 +23,15 @@ import kotlin.time.Duration.Companion.milliseconds
 
 class BrokerRabbit(
     clusterNodes: List<RabbitNode>,
-    username: String = "guest",
-    password: String = "guest",
+    username: String = DEFAULT_USERNAME,
+    password: String = DEFAULT_PASSWORD,
     private val subscribeDelayInMillis: Long = DEFAULT_SUBSCRIBE_DELAY_MILLIS
 ) : Broker {
 
     constructor(
         node: RabbitNode,
-        username: String = "guest",
-        password: String = "guest",
+        username: String = DEFAULT_USERNAME,
+        password: String = DEFAULT_PASSWORD,
         subscribeDelayInMillis: Long = DEFAULT_SUBSCRIBE_DELAY_MILLIS
     ) :
         this(listOf(node), username, password, subscribeDelayInMillis)
@@ -335,6 +335,10 @@ class BrokerRabbit(
 
         // Default value for the common stream size, in bytes.
         private const val DEFAULT_STREAM_SIZE = 8_000_000
+
+        // Default credentials to access RabbitMQ.
+        private const val DEFAULT_USERNAME = "guest"
+        private const val DEFAULT_PASSWORD = "guest"
 
         /**
          * Creates the creator of connections for accessing RabbitMQ broker.
