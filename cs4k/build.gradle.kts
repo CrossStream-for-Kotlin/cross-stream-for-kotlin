@@ -1,5 +1,3 @@
-
-
 plugins {
     kotlin("jvm") version "1.9.23"
     id("org.jlleitschuh.gradle.ktlint") version "11.6.0"
@@ -12,7 +10,34 @@ version = "0.0.1"
 
 repositories {
     mavenCentral()
+    jcenter()
 }
+
+
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+            groupId = group.toString()
+            artifactId = "cs4k"
+            version = version
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/CrossStream-for-Kotlin/cross-stream-for-kotlin")
+            credentials {
+                username = System.getenv("GITHUB_USER")
+                password = System.getenv("GITHUB_TOKEN_WITH_PACKAGE_PERMISSIONS")
+            }
+        }
+    }
+}
+
+
 
 dependencies {
 
@@ -48,17 +73,6 @@ tasks.test {
 
 kotlin {
     jvmToolchain(17)
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("mavenJava") {
-            from(components["java"])
-            groupId = group.toString()
-            artifactId = "cs4k"
-            version = version
-        }
-    }
 }
 
 tasks.named("check") {
