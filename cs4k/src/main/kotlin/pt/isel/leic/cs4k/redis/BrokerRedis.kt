@@ -80,7 +80,6 @@ class BrokerRedis(
 
     // Connection to asynchronous subscribe, unsubscribe and publish.
     private val pubSubConnection = retryExecutor.execute({ BrokerConnectionException() }, {
-        // if (redisClient is RedisClient) redisClient.connectPubSub() else (redisClient as RedisClusterClient).connectPubSub()
         when (redisClient) {
             is RedisClient -> redisClient.connectPubSub()
             is RedisClusterClient -> redisClient.connectPubSub()
@@ -233,14 +232,6 @@ class BrokerRedis(
                 is StatefulRedisClusterConnection -> conn.sync()
                 else -> throw IllegalArgumentException("Unsupported client.")
             }
-            /*
-            val syncCommands = if (conn is StatefulRedisClusterConnection) {
-                conn.sync()
-            } else {
-                (conn as StatefulRedisConnection).sync()
-            }
-
-             */
             syncCommands.eval(
                 GET_EVENT_ID_AND_UPDATE_HISTORY_SCRIPT,
                 ScriptOutputType.INTEGER,
@@ -268,14 +259,6 @@ class BrokerRedis(
                     is StatefulRedisClusterConnection -> conn.sync()
                     else -> throw IllegalArgumentException("Unsupported client.")
                 }
-                /*
-                val syncCommands = if (conn is StatefulRedisClusterConnection) {
-                    conn.sync()
-                } else {
-                    (conn as StatefulRedisConnection).sync()
-                }
-
-                 */
                 syncCommands.hgetall(prefix + topic)
             }
             val id = map[Event.Prop.ID.key]?.toLong()

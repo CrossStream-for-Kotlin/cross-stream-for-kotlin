@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "pt.isel.leic.cs4k"
-version = "0.0.6"
+version = "0.0.7"
 
 repositories {
     mavenCentral()
@@ -53,7 +53,7 @@ dependencies {
     implementation("com.rabbitmq:amqp-client:5.21.0")
 
     // For Redis
-    implementation("redis.clients:jedis:5.1.3")
+    implementation("redis.clients:jedis:5.1.0")
     implementation("io.lettuce:lettuce-core:6.3.2.RELEASE")
 
     // For logging
