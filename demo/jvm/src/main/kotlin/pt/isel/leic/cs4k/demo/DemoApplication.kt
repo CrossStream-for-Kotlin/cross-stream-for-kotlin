@@ -8,7 +8,6 @@ import pt.isel.leic.cs4k.postgreSQL.BrokerPostgreSQL
 import pt.isel.leic.cs4k.redis.BrokerRedis
 import pt.isel.leic.cs4k.redis.RedisNode
 
-
 @SpringBootApplication
 class DemoApplication {
 

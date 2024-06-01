@@ -1,22 +1,23 @@
+
 # Do the build process in multiple stages to reduce the size of the final image
 FROM node:alpine as build
 
 WORKDIR /app
 
 # Install dependencies
-COPY js/package.json  ./
+COPY ./js/package.json  ./
 
 RUN npm install
 
 # Copy the source code
-COPY js/src/ ./src
+COPY ../js/src/ ./src
 
 # Copy the configuration files
-COPY  js/.prettierrc \
-        js/tsconfig.json \
-        js/webpack.config.js \
-        js/public/index.html \
-        js/.eslintrc.json ./
+COPY  ./js/.prettierrc \
+        ./js/tsconfig.json \
+        ./js/webpack.config.js \
+        ./js/public/index.html \
+        ./js/.eslintrc.json ./
 
 RUN npm run build
 
@@ -27,3 +28,11 @@ COPY ./jvm/tests/nginx/nginx.conf /etc/nginx/
 # Using the intermediate build stage
 COPY --from=build /app/dist/main.js /opt/isel/leic/app/
 COPY  --from=build /app/index.html /opt/isel/leic/app/
+
+
+
+
+
+
+
+
