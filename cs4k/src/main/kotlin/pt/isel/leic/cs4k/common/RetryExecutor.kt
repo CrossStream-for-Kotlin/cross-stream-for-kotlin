@@ -1,7 +1,6 @@
 package pt.isel.leic.cs4k.common
 
 import org.slf4j.LoggerFactory
-import java.sql.SQLException
 
 /**
  * Represents a retry mechanism.
@@ -33,10 +32,6 @@ class RetryExecutor(
             try {
                 return action()
             } catch (e: Exception) {
-                logger.info("error caught -> {}", e.message)
-                if (e is SQLException) {
-                    logger.info("error is sql exception, sql state {}", e.sqlState)
-                }
                 if (!isToRetry(retryCondition, e)) throw e
             }
         }
