@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm") version "1.9.23"
     id("org.jlleitschuh.gradle.ktlint") version "11.6.0"
 
-    `maven-publish` // gradle task 'publishToMavenLocal'
+    `maven-publish`
 }
 
 group = "pt.isel.leic.cs4k"
@@ -13,17 +13,16 @@ repositories {
     jcenter()
 }
 
-
-
 publishing {
-    publications {
-        create<MavenPublication>("mavenJava") {
-            from(components["java"])
-            groupId = group.toString()
-            artifactId = "cs4k"
-            version = version
-        }
-    }
+    // ----> gradle task 'publishToMavenLocal' <----
+    // publications {
+    //     create<MavenPublication>("mavenJava") {
+    //         from(components["java"])
+    //         groupId = group.toString()
+    //         artifactId = "cs4k"
+    //         version = version
+    //     }
+    // }
 
     repositories {
         maven {
@@ -36,8 +35,6 @@ publishing {
         }
     }
 }
-
-
 
 dependencies {
 
@@ -65,6 +62,7 @@ dependencies {
 
     // For automated tests
     testImplementation(kotlin("test"))
+    testImplementation("org.mockito:mockito-core:5.12.0")
 }
 
 tasks.test {
