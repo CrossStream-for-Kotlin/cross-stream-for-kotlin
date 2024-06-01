@@ -10,12 +10,22 @@ plugins {
 group = "pt.isel.leic.cs4k.demo"
 version = "0.0.1"
 
+
 repositories {
     mavenCentral()
-
-    // For Library
-    mavenLocal()
+    maven {
+        url = uri("https://maven.pkg.github.com/CrossStream-for-Kotlin/cross-stream-for-kotlin")
+        credentials {
+            username = System.getenv("GITHUB_USER")
+            password = System.getenv("GITHUB_TOKEN_WITH_PACKAGE_PERMISSIONS")
+        }
+    }
 }
+
+dependencies {
+    implementation("pt.isel.leic.cs4k:cs4k:0.0.1") // Substitua pela versão correta da sua biblioteca
+}
+
 
 
 dependencies {
