@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "pt.isel.leic.cs4k"
-version = "0.0.2"
+version = "0.0.5"
 
 repositories {
     mavenCentral()
@@ -108,7 +108,7 @@ task<Exec>("redisDown") {
  * RabbitMQ related tasks.
  */
 task<Exec>("rabbitUp") {
-    commandLine("docker-compose", "up", "-d", "--build", "rabbit")
+    commandLine("docker-compose", "up", "-d", "--build", "rabbit-mq")
 }
 
 task<Exec>("rabbitDown") {
