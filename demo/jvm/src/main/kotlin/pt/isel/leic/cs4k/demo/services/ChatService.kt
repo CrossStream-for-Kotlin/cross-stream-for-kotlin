@@ -5,9 +5,9 @@ import com.fasterxml.jackson.module.kotlin.KotlinModule
 import jakarta.annotation.PreDestroy
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.demo.domain.Message
 import pt.isel.leic.cs4k.demo.http.models.output.MessageOutputModel
-import pt.isel.leic.cs4k.postgreSQL.BrokerPostgreSQL
 import java.time.Instant
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -15,7 +15,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 @Component
-class ChatService(val broker: BrokerPostgreSQL) {
+class ChatService(val broker: Broker) {
 
     private val generalGroup = "general"
 

@@ -1,54 +1,7 @@
 version: "3.3"
 
 services:
-  postgres:
-    container_name: postgres
-    build:
-      context: .
-      dockerfile: ./tests/Dockerfile-postgres
-    environment:
-      - POSTGRES_USER=dbuser
-      - POSTGRES_PASSWORD=changeit
-      - POSTGRES_DB=db
-    ports:
-      - "5432:5432"
-
-  spring-service:
-    build:
-      context: .
-      dockerfile: tests/Dockerfile-spring
-    depends_on:
-      - postgres
-      - rabbit-mq1
-      - rabbit-mq2
-      - rabbit-mq3
-      - rabbit-mq4
-      - rabbit-mq5
-    command: ["scripts/wait-for-rabbitmq.sh", "rabbit-mq", "5672","scripts/wait-for-postgres.sh", "localhost"]
-    environment:
-      PORT: 8080
-      POSTGRESQL_DB_URL: "jdbc:postgresql://postgres:5432/db?user=dbuser&password=changeit"
-
-  nginx:
-    container_name: nginx
-    build:
-      context: .
-      dockerfile: tests/Dockerfile-nginx
-    ports:
-      - "8088:8088"
-    depends_on:
-      - spring-service
-
-  # Just a machine running ubuntu, with 'dig' installed so that we can observe the docker compose environment.
-  ubuntu:
-    container_name: ubuntu
-    build:
-      context: .
-      dockerfile: tests/Dockerfile-ubuntu
-    tty: true
-
-
-    # Rabbit single node
+  # Rabbit single node
   rabbit-mq:
     container_name: rabbit-mq
     image: rabbitmq:alpine
@@ -148,6 +101,40 @@ services:
       - rabbitmq-cluster
     depends_on:
       - rabbit-mq1
+
+  spring-service:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-spring
+    depends_on:
+      - rabbit-mq
+      - rabbit-mq1
+      - rabbit-mq2
+      - rabbit-mq3
+      - rabbit-mq4
+      - rabbit-mq5
+    command: [ "scripts/wait-for-rabbitmq.sh", "rabbit-mq", "5672","scripts/wait-for-postgres.sh", "localhost" ]
+    environment:
+
+      CS4K_OPTION: 3
+
+  nginx:
+    container_name: nginx
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-nginx
+    ports:
+      - "8088:8088"
+    depends_on:
+      - spring-service
+
+  # Just a machine running ubuntu, with 'dig' installed so that we can observe the docker compose environment.
+  ubuntu:
+    container_name: ubuntu
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-ubuntu
+    tty: true
 
 networks:
   rabbitmq-cluster:

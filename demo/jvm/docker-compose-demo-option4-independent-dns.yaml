@@ -1,35 +1,19 @@
 version: "3.3"
 
 services:
-  postgres:
-    container_name: postgres
-    build:
-      context: .
-      dockerfile: tests/Dockerfile-postgres
-    environment:
-      - POSTGRES_USER=dbuser
-      - POSTGRES_PASSWORD=changeit
-      - POSTGRES_DB=db
-    ports:
-      - "5432:5432"
-
   spring-service:
     build:
       context: .
       dockerfile: tests/Dockerfile-spring
-    depends_on:
-      - postgres
-    command: ["scripts/wait-for-postgres.sh", "localhost"]
     environment:
       SERVICE_NAME: "spring-service"
-      PORT: 8080
-      POSTGRESQL_DB_URL: "jdbc:postgresql://postgres:5432/db?user=dbuser&password=changeit"
+      CS4K_OPTION: 4.2
 
   nginx:
     container_name: nginx
     build:
-      context: .
-      dockerfile: tests/Dockerfile-nginx
+      context: ..
+      dockerfile: ./jvm/tests/Dockerfile-nginx
     ports:
       - "8088:8088"
     depends_on:

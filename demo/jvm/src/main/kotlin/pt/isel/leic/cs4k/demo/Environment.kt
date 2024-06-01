@@ -5,6 +5,9 @@ package pt.isel.leic.cs4k.demo
  */
 object Environment {
 
+    // Option for CS4k library.
+    const val CS4K_OPTION = "CS4K_OPTION"
+
     // Name of environment variable for PostgreSQL database URL.
     private const val KEY_POSTGRESQL_DB_URL = "POSTGRESQL_DB_URL"
 
@@ -19,6 +22,13 @@ object Environment {
 
     // Name of environment variable for service name.
     private const val KEY_SERVICE_NAME = "SERVICE_NAME"
+
+    /**
+     * Get the cs4k library option from the environment variable [CS4K_OPTION].
+     *
+     * @return The cs4k option or null if the environment variable is missing.
+     */
+    fun getCS4KOption() = System.getenv(CS4K_OPTION)?.toFloat()
 
     /**
      * Get the PostgreSQL database URL from the environment variable [KEY_POSTGRESQL_DB_URL].

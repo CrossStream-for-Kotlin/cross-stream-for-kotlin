@@ -1,22 +1,29 @@
 version: "3.3"
 
 services:
-  redis:
-      container_name: redis
-      image: redis:alpine
-      ports:
-        - "6379:6379"
+  postgres:
+    container_name: postgres
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-postgres
+    environment:
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=changeit
+      - POSTGRES_DB=db
+    ports:
+      - "5432:5432"
 
   spring-service:
     build:
       context: .
       dockerfile: tests/Dockerfile-spring
     depends_on:
-      - redis
+      - postgres
+    command: ["scripts/wait-for-postgres.sh", "localhost"]
     environment:
-      REDIS_PORT: "6379"
-      REDIS_HOST: "redis"
-      CS4K_OPTION: 2
+      PORT: 8080
+      POSTGRESQL_DB_URL: "jdbc:postgresql://postgres:5432/db?user=dbuser&password=changeit"
+      CS4K_OPTION: 1
 
   nginx:
     container_name: nginx

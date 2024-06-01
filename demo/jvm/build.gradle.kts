@@ -10,9 +10,11 @@ plugins {
 group = "pt.isel.leic.cs4k.demo"
 version = "0.0.1"
 
-
 repositories {
+    // mavenLocal()
     mavenCentral()
+
+    // For CS4K Library.
     maven {
         url = uri("https://maven.pkg.github.com/CrossStream-for-Kotlin/cross-stream-for-kotlin")
         credentials {
@@ -23,12 +25,6 @@ repositories {
 }
 
 dependencies {
-    implementation("pt.isel.leic.cs4k:cs4k:0.0.1")
-}
-
-
-
-dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.apache.tomcat.embed:tomcat-embed-core:10.1.17")
     implementation("org.apache.tomcat.embed:tomcat-embed-websocket:10.1.17")
@@ -36,16 +32,12 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-    implementation(project(mapOf("path" to ":")))
-    implementation(project(mapOf("path" to ":")))
-    implementation(project(mapOf("path" to ":")))
-    implementation(project(mapOf("path" to ":")))
 
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webflux")
 
-    // For Library
+    // For CS4K Library.
     implementation("pt.isel.leic.cs4k:cs4k:0.0.1")
 }
 
@@ -55,41 +47,6 @@ tasks.test {
 
 kotlin {
     jvmToolchain(17)
-}
-
-/**
- * PostgreSQl DB related tasks.
- */
-task<Exec>("postgresUp") {
-    commandLine("docker-compose", "-f", "docker-compose-demo-option1.yaml", "up", "-d", "--build", "postgres")
-}
-
-task<Exec>("postgresWait") {
-    commandLine("docker", "exec", "postgres", "/app/bin/wait-for-postgres.sh", "localhost")
-    dependsOn("postgresUp")
-}
-
-task<Exec>("postgresDown") {
-    commandLine("docker-compose", "-f", "docker-compose-demo-option1.yaml", "down")
-}
-
-/**
- * Redis related tasks
- */
-task<Exec>("redisUp") {
-    commandLine(
-        "docker-compose",
-        "-f",
-        "docker-compose-demo-option2-redis.yaml",
-        "up",
-        "-d",
-        "--build",
-        "redis"
-    )
-}
-
-task<Exec>("redisDown") {
-    commandLine("docker-compose", "-f", "docker-compose-demo-option2-redis.yaml", "down")
 }
 
 /**
@@ -103,13 +60,13 @@ task<Copy>("extractUberJar") {
     into("build/dependency")
 }
 
-// Option 1
+// Option 1 - PostgreSQL
 
-task<Exec>("demoOption1ComposeUp") {
+task<Exec>("demoOption1PostgresComposeUp") {
     commandLine(
         "docker-compose",
         "-f",
-        "docker-compose-demo-option1.yaml",
+        "docker-compose-demo-option1-postgres.yaml",
         "up",
         "--build",
         "--force-recreate",
@@ -119,11 +76,11 @@ task<Exec>("demoOption1ComposeUp") {
     dependsOn("extractUberJar")
 }
 
-task<Exec>("demoOption1ComposeDown") {
-    commandLine("docker-compose", "-f", "docker-compose-demo-option1.yaml", "down")
+task<Exec>("demoOption1PostgresComposeDown") {
+    commandLine("docker-compose", "-f", "docker-compose-demo-option1-postgres.yaml", "down")
 }
 
-// Option 2
+// Option 2 - Redis
 
 task<Exec>("demoOption2RedisComposeUp") {
     commandLine(
@@ -143,11 +100,13 @@ task<Exec>("demoOption2RedisComposeDown") {
     commandLine("docker-compose", "-f", "docker-compose-demo-option2-redis.yaml", "down")
 }
 
-task<Exec>("demoOption2RabbitComposeUp") {
+// Option 3 - RabbitMQ
+
+task<Exec>("demoOption3RabbitComposeUp") {
     commandLine(
         "docker-compose",
         "-f",
-        "docker-compose-demo-option2-rabbit.yaml",
+        "docker-compose-demo-option3-rabbit.yaml",
         "up",
         "--build",
         "--force-recreate",
@@ -157,17 +116,17 @@ task<Exec>("demoOption2RabbitComposeUp") {
     dependsOn("extractUberJar")
 }
 
-task<Exec>("demoOption2RabbitComposeDown") {
-    commandLine("docker-compose", "-f", "docker-compose-demo-option2-rabbit.yaml", "down")
+task<Exec>("demoOption3RabbitComposeDown") {
+    commandLine("docker-compose", "-f", "docker-compose-demo-option3-rabbit.yaml", "down")
 }
 
-// Option 3
+// Option 4 - Independent
 
-task<Exec>("demoOption3ComposeUp") {
+task<Exec>("demoOption4IndependentMulticastComposeUp") {
     commandLine(
         "docker-compose",
         "-f",
-        "docker-compose-demo-option3.yaml",
+        "docker-compose-demo-option4-independent-multicast.yaml",
         "up",
         "--build",
         "--force-recreate",
@@ -177,8 +136,26 @@ task<Exec>("demoOption3ComposeUp") {
     dependsOn("extractUberJar")
 }
 
-task<Exec>("demoOption3ComposeDown") {
-    commandLine("docker-compose", "-f", "docker-compose-demo-option3.yaml", "down")
+task<Exec>("demoOption4IndependentMulticastComposeDown") {
+    commandLine("docker-compose", "-f", "docker-compose-demo-option4-independent-multicast.yaml", "down")
+}
+
+task<Exec>("demoOption4IndependentDNSComposeUp") {
+    commandLine(
+        "docker-compose",
+        "-f",
+        "docker-compose-demo-option4-independent-dns.yaml",
+        "up",
+        "--build",
+        "--force-recreate",
+        "--scale",
+        "spring-service=3"
+    )
+    dependsOn("extractUberJar")
+}
+
+task<Exec>("demoOption4IndependentDNSComposeDown") {
+    commandLine("docker-compose", "-f", "docker-compose-demo-option4-independent-dns.yaml", "down")
 }
 
 // Scale up/down:
