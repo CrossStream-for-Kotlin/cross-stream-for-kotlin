@@ -14,7 +14,7 @@ import java.net.InetAddress
  *  - Periodic querying the DNS server, giving it a name (that being a Docker service name).
  *  - Adding new entries to the neighbors.
  *
- * @property hostname The hostname in Docker.
+ * @property hostname The hostname.
  * @property serviceName The Docker service name.
  * @property neighbors The set of neighbors.
  * @property lookupAgainTime Amount of time, in milliseconds before another DNS query.

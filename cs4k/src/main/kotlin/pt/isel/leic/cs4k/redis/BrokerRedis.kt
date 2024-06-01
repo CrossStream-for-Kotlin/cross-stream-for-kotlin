@@ -26,20 +26,36 @@ import pt.isel.leic.cs4k.common.Utils
 import java.util.UUID
 
 /**
- * Option 2: Broker Redis.
+ * Broker Redis - Cluster.
  *
- * @property redisNode The Redis node.
+ * @property redisNodes The list of Redis nodes.
  * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
  */
 class BrokerRedis(
-    private val listRedisNode: List<RedisNode>,
-    private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
+    private val redisNodes: List<RedisNode>,
+    private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE
 ) : Broker {
+
+    /**
+     * Broker Redis - Single Node.
+     *
+     * @property redisNode The Redis node.
+     * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
+     */
+    constructor(
+        redisNode: RedisNode,
+        dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE
+    ) :
+        this(listOf(redisNode), dbConnectionPoolSize)
 
     init {
         // Check database connection pool size.
         Utils.checkDbConnectionPoolSize(dbConnectionPoolSize)
     }
+
+    // Check if it is cluster.
+    private val isCluster: Boolean
+        get() = redisNodes.size > 1
 
     // Shutdown state.
     private var isShutdown = false
@@ -55,10 +71,10 @@ class BrokerRedis(
 
     // Redis client.
     private val redisClient = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (listRedisNode.size > 1) {
-            createRedisClusterClient(listRedisNode)
+        if (isCluster) {
+            createRedisClusterClient(redisNodes)
         } else {
-            createRedisClient(listRedisNode.first())
+            createRedisClient(redisNodes.first())
         }
     })
 
@@ -69,7 +85,7 @@ class BrokerRedis(
 
     // Connection pool.
     private val connectionPool = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (listRedisNode.size > 1) {
+        if (isCluster) {
             createClusterConnectionPool(dbConnectionPoolSize, redisClient as RedisClusterClient)
         } else {
             createConnectionPool(dbConnectionPoolSize, redisClient as RedisClient)

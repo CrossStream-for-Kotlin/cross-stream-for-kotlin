@@ -24,7 +24,7 @@ import java.util.UUID
 import kotlin.concurrent.thread
 
 /**
- * Option 1: BrokerPostgreSQL.
+ * Broker PostgreSQL.
  *
  * @property postgreSQLDbUrl The PostgreSQL database URL.
  * @property dbConnectionPoolSize The maximum size that the JDBC connection pool is allowed to reach.

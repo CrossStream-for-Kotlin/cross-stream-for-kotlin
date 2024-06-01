@@ -32,6 +32,9 @@ import pt.isel.leic.cs4k.independentBroker.network.readSuspend
 import pt.isel.leic.cs4k.independentBroker.network.writeSuspend
 import pt.isel.leic.cs4k.independentBroker.serviceDiscovery.DNSServiceDiscovery
 import pt.isel.leic.cs4k.independentBroker.serviceDiscovery.MulticastServiceDiscovery
+import pt.isel.leic.cs4k.independentBroker.serviceDiscovery.config.DNSServiceDiscoveryConfig
+import pt.isel.leic.cs4k.independentBroker.serviceDiscovery.config.MulticastServiceDiscoveryConfig
+import pt.isel.leic.cs4k.independentBroker.serviceDiscovery.config.ServiceDiscoveryConfig
 import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -44,11 +47,10 @@ import kotlin.concurrent.thread
 import kotlin.time.Duration
 
 /**
- * Option 3: Broker Independent.
+ * Broker Independent.
  *
  * @property hostname The hostname.
- * @property serviceName The service name.
- * If the service name is provided, DNSServiceDiscovery is used, otherwise MulticastServiceDiscovery is used.
+ * @property serviceDiscoveryConfig Service Discovery configuration.
  *
  * TODO("Save the latest events for each topic and make them available to new subscribers")
  * TODO("Fix neighbors scale down errors")
@@ -56,7 +58,7 @@ import kotlin.time.Duration
  */
 class BrokerIndependent(
     private val hostname: String,
-    private val serviceName: String? = null
+    private val serviceDiscoveryConfig: ServiceDiscoveryConfig
 ) : Broker {
 
     // Shutdown state.
@@ -119,12 +121,7 @@ class BrokerIndependent(
                 serverSocketChannel.bind(inetSocketAddress)
                 logger.info("[{}] server socket bound", selfIp)
 
-                // Start service discovery.
-                if (serviceName == null) {
-                    MulticastServiceDiscovery(neighbors, selfIp).start()
-                } else {
-                    DNSServiceDiscovery(hostname, serviceName, neighbors).start()
-                }
+                startServiceDiscovery()
 
                 while (true) {
                     val socketChannel = serverSocketChannel.acceptSuspend()
@@ -134,6 +131,20 @@ class BrokerIndependent(
                 }
             }
         })
+    }
+
+    /**
+     * Start service discovery.
+     */
+    private fun startServiceDiscovery() {
+        when (serviceDiscoveryConfig) {
+            is DNSServiceDiscoveryConfig ->
+                DNSServiceDiscovery(serviceDiscoveryConfig.hostname, serviceDiscoveryConfig.serviceName, neighbors)
+                    .start()
+            is MulticastServiceDiscoveryConfig ->
+                MulticastServiceDiscovery(neighbors, InetAddress.getByName(serviceDiscoveryConfig.hostname).hostAddress)
+                    .start()
+        }
     }
 
     /**
