@@ -23,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    implementation("pt.isel.leic.cs4k:cs4k:0.0.1") // Substitua pela versão correta da sua biblioteca
+    implementation("pt.isel.leic.cs4k:cs4k:0.0.1")
 }
 
 
