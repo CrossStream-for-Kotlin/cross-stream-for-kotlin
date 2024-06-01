@@ -6,23 +6,22 @@ plugins {
 }
 
 group = "pt.isel.leic.cs4k"
-version = "0.0.1"
+version = "0.0.2"
 
 repositories {
     mavenCentral()
-    jcenter()
 }
 
 publishing {
     // ----> gradle task 'publishToMavenLocal' <----
-    // publications {
-    //     create<MavenPublication>("mavenJava") {
-    //         from(components["java"])
-    //         groupId = group.toString()
-    //         artifactId = "cs4k"
-    //         version = version
-    //     }
-    // }
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+            groupId = group.toString()
+            artifactId = "cs4k"
+            version = version
+        }
+    }
 
     repositories {
         maven {
