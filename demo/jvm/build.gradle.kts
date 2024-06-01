@@ -12,17 +12,9 @@ version = "0.0.1"
 
 repositories {
     mavenCentral()
-    maven {
-        url = uri("https://maven.pkg.github.com/CrossStream-for-Kotlin/cross-stream-for-kotlin")
-        credentials {
-            username = System.getenv("GITHUB_USER")
-            password = System.getenv("GITHUB_TOKEN_WITH_PACKAGE_PERMISSIONS")
-        }
-    }
-}
 
-dependencies {
-    implementation("pt.isel.leic.cs4k:cs4k:0.0.1")
+    // For Library
+    mavenLocal()
 }
 
 
