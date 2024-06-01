@@ -304,16 +304,18 @@ class BrokerPostgreSQL(
                                 message varchar(512), 
                                 is_last boolean default false
                             );
-                        """.trimIndent()
+                            """.trimIndent()
                         )
-                    } catch(e: PSQLException) {
-                        // Here the unique violation exception is ignored.
-                        // This is done because of a check-then-act done in the SQL command, but there's no
-                        // harm done to the app or the database.
-                        if(e.sqlState != UNIQUE_VIOLATION_SQLSTATE)
+                    } catch (e: SQLException) {
+                        logger.info("error with sqlstate -> {}", e.sqlState)
+                        if (e.sqlState != UNIQUE_VIOLATION_SQLSTATE) {
                             throw e
-                        else
+                        } else {
+                            // Here the unique violation exception is ignored.
+                            // This is done because of a check-then-act done in the SQL command, but there's no
+                            // harm done to the app or the database.
                             logger.info("schema and tables already created, ignoring...")
+                        }
                     }
                 }
             }
