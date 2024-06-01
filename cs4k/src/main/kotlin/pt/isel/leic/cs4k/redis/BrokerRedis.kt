@@ -23,7 +23,7 @@ import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
 import pt.isel.leic.cs4k.common.Utils
-import java.util.UUID
+import java.util.*
 
 /**
  * Broker Redis - Cluster.
@@ -80,15 +80,20 @@ class BrokerRedis(
 
     // Connection to asynchronous subscribe, unsubscribe and publish.
     private val pubSubConnection = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (redisClient is RedisClient) redisClient.connectPubSub() else (redisClient as RedisClusterClient).connectPubSub()
+        // if (redisClient is RedisClient) redisClient.connectPubSub() else (redisClient as RedisClusterClient).connectPubSub()
+        when (redisClient) {
+            is RedisClient -> redisClient.connectPubSub()
+            is RedisClusterClient -> redisClient.connectPubSub()
+            else -> throw IllegalArgumentException("Unsupported client.")
+        }
     })
 
     // Connection pool.
     private val connectionPool = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (isCluster) {
-            createClusterConnectionPool(dbConnectionPoolSize, redisClient as RedisClusterClient)
-        } else {
-            createConnectionPool(dbConnectionPoolSize, redisClient as RedisClient)
+        when (redisClient) {
+            is RedisClient -> createConnectionPool(dbConnectionPoolSize, redisClient)
+            is RedisClusterClient -> createClusterConnectionPool(dbConnectionPoolSize, redisClient)
+            else -> throw IllegalArgumentException("Unsupported client.")
         }
     })
 
@@ -223,11 +228,19 @@ class BrokerRedis(
      */
     private fun getEventIdAndUpdateHistory(topic: String, message: String, isLast: Boolean): Long =
         connectionPool.borrowObject().use { conn ->
+            val syncCommands = when (conn) {
+                is StatefulRedisConnection -> conn.sync()
+                is StatefulRedisClusterConnection -> conn.sync()
+                else -> throw IllegalArgumentException("Unsupported client.")
+            }
+            /*
             val syncCommands = if (conn is StatefulRedisClusterConnection) {
                 conn.sync()
             } else {
                 (conn as StatefulRedisConnection).sync()
             }
+
+             */
             syncCommands.eval(
                 GET_EVENT_ID_AND_UPDATE_HISTORY_SCRIPT,
                 ScriptOutputType.INTEGER,
@@ -250,11 +263,19 @@ class BrokerRedis(
     private fun getLastEvent(topic: String): Event? =
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             val map = connectionPool.borrowObject().use { conn ->
+                val syncCommands = when (conn) {
+                    is StatefulRedisConnection -> conn.sync()
+                    is StatefulRedisClusterConnection -> conn.sync()
+                    else -> throw IllegalArgumentException("Unsupported client.")
+                }
+                /*
                 val syncCommands = if (conn is StatefulRedisClusterConnection) {
                     conn.sync()
                 } else {
                     (conn as StatefulRedisConnection).sync()
                 }
+
+                 */
                 syncCommands.hgetall(prefix + topic)
             }
             val id = map[Event.Prop.ID.key]?.toLong()
