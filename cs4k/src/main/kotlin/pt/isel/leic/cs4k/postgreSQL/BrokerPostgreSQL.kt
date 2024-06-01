@@ -294,8 +294,9 @@ class BrokerPostgreSQL(
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             connectionPool.connection.use { conn ->
                 conn.createStatement().use { stm ->
-                    stm.execute(
-                        """
+                    try {
+                        stm.execute(
+                            """
                             create schema if not exists cs4k;
                             create table if not exists cs4k.events (
                                 topic varchar(128) primary key, 
@@ -304,7 +305,16 @@ class BrokerPostgreSQL(
                                 is_last boolean default false
                             );
                         """.trimIndent()
-                    )
+                        )
+                    } catch(e: PSQLException) {
+                        // Here the unique violation exception is ignored.
+                        // This is done because of a check-then-act done in the SQL command, but there's no
+                        // harm done to the app or the database.
+                        if(e.sqlState != UNIQUE_VIOLATION_SQLSTATE)
+                            throw e
+                        else
+                            logger.info("schema and tables already created, ignoring...")
+                    }
                 }
             }
         }, retryCondition)
@@ -316,6 +326,8 @@ class BrokerPostgreSQL(
 
         // Block until new notifications arrive, using the value '0'.
         private const val BLOCK_UNTIL_NEW_NOTIFICATIONS = 0
+
+        private const val UNIQUE_VIOLATION_SQLSTATE = "23505"
 
         /**
          * Create a connection poll for database interactions.
