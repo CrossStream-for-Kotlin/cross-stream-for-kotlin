@@ -7,8 +7,6 @@ import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.cluster.RedisClusterClient
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection
-import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands
-import io.lettuce.core.cluster.api.sync.RedisClusterCommands
 import io.lettuce.core.pubsub.RedisPubSubAdapter
 import io.lettuce.core.support.ConnectionPoolSupport
 import org.apache.commons.pool2.impl.GenericObjectPool
@@ -48,7 +46,7 @@ class BrokerRedis(
         redisNode: RedisNode,
         dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE
     ) :
-            this(listOf(redisNode), dbConnectionPoolSize)
+        this(listOf(redisNode), dbConnectionPoolSize)
 
     init {
         // Check database connection pool size.
@@ -113,12 +111,19 @@ class BrokerRedis(
 
     // Retry condition.
     private val retryCondition: (throwable: Throwable) -> Boolean = { throwable ->
-        !(throwable is RedisException &&
-                ((pubSubConnection != null && connectionPool != null &&
-                        (!pubSubConnection.isOpen || connectionPool.isClosed) ||
-                        (pubSubClusterConnection != null && clusterConnectionPool != null &&
-                                (!pubSubClusterConnection.isOpen || clusterConnectionPool.isClosed)))
-                        ))
+        !(
+            throwable is RedisException &&
+                (
+                    (
+                        pubSubConnection != null && connectionPool != null &&
+                            (!pubSubConnection.isOpen || connectionPool.isClosed) ||
+                            (
+                                pubSubClusterConnection != null && clusterConnectionPool != null &&
+                                    (!pubSubClusterConnection.isOpen || clusterConnectionPool.isClosed)
+                                )
+                        )
+                    )
+            )
     }
 
     private val singletonRedisPubSubAdapter = object : RedisPubSubAdapter<String, String>() {
@@ -137,10 +142,11 @@ class BrokerRedis(
 
     init {
         // Add a listener.
-        if (isCluster)
+        if (isCluster) {
             pubSubClusterConnection?.addListener(singletonRedisPubSubAdapter)
-        else
+        } else {
             pubSubConnection?.addListener(singletonRedisPubSubAdapter)
+        }
     }
 
     override fun subscribe(topic: String, handler: (event: Event) -> Unit): () -> Unit {
@@ -177,7 +183,6 @@ class BrokerRedis(
             connectionPool?.close()
             redisClient?.shutdown()
         }
-
     }
 
     /**
@@ -205,10 +210,11 @@ class BrokerRedis(
     private fun subscribeTopic(topic: String) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             logger.info("subscribe new topic '{}'", prefix + topic)
-            if (isCluster)
+            if (isCluster) {
                 pubSubClusterConnection?.async()?.subscribe(prefix + topic)
-            else
+            } else {
                 pubSubConnection?.async()?.subscribe(prefix + topic)
+            }
         }, retryCondition)
     }
 
@@ -221,10 +227,11 @@ class BrokerRedis(
     private fun unsubscribeTopic(topic: String) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             logger.info("unsubscribe gone topic '{}'", prefix + topic)
-            if (isCluster)
+            if (isCluster) {
                 pubSubClusterConnection?.async()?.unsubscribe(prefix + topic)
-            else
+            } else {
                 pubSubConnection?.async()?.unsubscribe(prefix + topic)
+            }
         }, retryCondition)
     }
 
@@ -246,9 +253,9 @@ class BrokerRedis(
                     isLast = isLastMessage
                 )
             )
-            if (isCluster)
+            if (isCluster) {
                 pubSubClusterConnection?.async()?.publish(prefix + topic, eventJson)
-            else {
+            } else {
                 pubSubConnection?.async()?.publish(prefix + topic, eventJson)
             }
             logger.info("publish topic '{}' event '{}'", topic, eventJson)
@@ -300,7 +307,6 @@ class BrokerRedis(
         }
         return id!!
     }
-
 
     /**
      * Get the last event from the topic.
