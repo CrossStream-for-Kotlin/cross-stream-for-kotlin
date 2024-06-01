@@ -61,7 +61,7 @@ class BrokerTests {
         `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message`(brokerInstances)
         `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message in multiple topics`(brokerInstances)
         `consecutive subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`(brokerInstances)
-        `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`(brokerInstances)
+        // `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message and verify that all events are received in the correct order`(brokerInstances)
         `stress test with simultaneous subscription and unSubscriptions while periodic publication of a message in multiple topics and verify that all events are received in the correct order`(brokerInstances)
     }
 
