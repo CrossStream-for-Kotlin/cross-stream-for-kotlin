@@ -1,4 +1,4 @@
-package pt.isel.leic.cs4k.independentBroker.network
+package pt.isel.leic.cs4k.independent.network
 
 /**
  * Represents the state of a connection with a [Neighbor].

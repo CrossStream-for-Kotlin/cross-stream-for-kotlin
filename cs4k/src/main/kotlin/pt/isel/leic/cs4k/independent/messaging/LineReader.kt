@@ -1,4 +1,4 @@
-package pt.isel.leic.cs4k.independentBroker.messaging
+package pt.isel.leic.cs4k.independent.messaging
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

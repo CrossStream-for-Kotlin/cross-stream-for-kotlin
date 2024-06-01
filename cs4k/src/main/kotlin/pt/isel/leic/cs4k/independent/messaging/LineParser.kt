@@ -1,4 +1,4 @@
-package pt.isel.leic.cs4k.independentBroker.messaging
+package pt.isel.leic.cs4k.independent.messaging
 
 import java.nio.CharBuffer
 import java.util.LinkedList

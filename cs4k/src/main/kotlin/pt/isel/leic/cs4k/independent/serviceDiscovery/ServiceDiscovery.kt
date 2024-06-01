@@ -1,4 +1,4 @@
-package pt.isel.leic.cs4k.independentBroker.serviceDiscovery
+package pt.isel.leic.cs4k.independent.serviceDiscovery
 
 /**
  * Public contract of Service Discovery.

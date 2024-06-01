@@ -1,4 +1,4 @@
-package pt.isel.leic.cs4k.independentBroker.network
+package pt.isel.leic.cs4k.independent.network
 
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousSocketChannel

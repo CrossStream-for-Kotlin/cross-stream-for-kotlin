@@ -1,10 +1,10 @@
-package pt.isel.leic.cs4k.independentBroker.serviceDiscovery
+package pt.isel.leic.cs4k.independent.serviceDiscovery
 
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.RetryExecutor
-import pt.isel.leic.cs4k.independentBroker.network.Neighbor
-import pt.isel.leic.cs4k.independentBroker.network.Neighbors
+import pt.isel.leic.cs4k.independent.network.Neighbor
+import pt.isel.leic.cs4k.independent.network.Neighbors
 import java.lang.Thread.sleep
 import java.net.Inet4Address
 import java.net.InetAddress

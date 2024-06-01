@@ -1,4 +1,4 @@
-package pt.isel.leic.cs4k.independentBroker.serviceDiscovery.config
+package pt.isel.leic.cs4k.independent.serviceDiscovery.config
 
 /**
  * DNS Service Discovery configuration.
