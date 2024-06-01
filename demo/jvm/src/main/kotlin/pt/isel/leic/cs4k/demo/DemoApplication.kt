@@ -5,10 +5,12 @@ import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
 import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.demo.Environment.CS4K_OPTION
-import pt.isel.leic.cs4k.independentBroker.BrokerIndependent
-import pt.isel.leic.cs4k.independentBroker.serviceDiscovery.config.DNSServiceDiscoveryConfig
-import pt.isel.leic.cs4k.independentBroker.serviceDiscovery.config.MulticastServiceDiscoveryConfig
+import pt.isel.leic.cs4k.independent.BrokerIndependent
+import pt.isel.leic.cs4k.independent.serviceDiscovery.config.DNSServiceDiscoveryConfig
+import pt.isel.leic.cs4k.independent.serviceDiscovery.config.MulticastServiceDiscoveryConfig
 import pt.isel.leic.cs4k.postgreSQL.BrokerPostgreSQL
+import pt.isel.leic.cs4k.rabbitmq.BrokerRabbit
+import pt.isel.leic.cs4k.rabbitmq.RabbitNode
 import pt.isel.leic.cs4k.redis.BrokerRedis
 import pt.isel.leic.cs4k.redis.RedisNode
 
@@ -19,14 +21,16 @@ class DemoApplication {
     fun broker(): Broker =
         when (Environment.getCS4KOption()) {
             1F -> BrokerPostgreSQL(
-                Environment.getPostgreSQLDbUrl()
+                Environment.getPostgreSqlDbUrl()
             )
 
             2F -> BrokerRedis(
                 RedisNode(Environment.getRedisHost(), Environment.getRedisPort())
             )
 
-            3F -> TODO("Add RabbitMQ")
+            3F -> BrokerRabbit(
+                RabbitNode(Environment.getRabbitHost(), Environment.getRabbitPort())
+            )
 
             4.1F -> BrokerIndependent(
                 Environment.getHostname(),

@@ -19,8 +19,8 @@ services:
       dockerfile: tests/Dockerfile-spring
     depends_on:
       - postgres
-    command: ["scripts/wait-for-postgres.sh", "localhost"]
     environment:
+      WAIT_HOSTS: postgres:5432
       PORT: 8080
       POSTGRESQL_DB_URL: "jdbc:postgresql://postgres:5432/db?user=dbuser&password=changeit"
       CS4K_OPTION: 1
