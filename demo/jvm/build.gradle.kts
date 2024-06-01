@@ -25,6 +25,10 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+    implementation(project(mapOf("path" to ":")))
+    implementation(project(mapOf("path" to ":")))
+    implementation(project(mapOf("path" to ":")))
+    implementation(project(mapOf("path" to ":")))
 
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -165,6 +169,7 @@ task<Exec>("demoOption3ComposeUp") {
 task<Exec>("demoOption3ComposeDown") {
     commandLine("docker-compose", "-f", "docker-compose-demo-option3.yaml", "down")
 }
+
 
 // Scale up/down:
 //  - docker-compose -f <DOCKER_COMPOSE_YAML> up --scale spring-service=<NUMBER_OF_INSTANCES> --no-recreate

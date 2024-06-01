@@ -32,9 +32,8 @@ import java.util.UUID
  * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
  */
 class BrokerRedis(
-    private val redisNode: RedisNode,
+    private val listRedisNode: List<RedisNode>,
     private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
-    useCluster: Boolean = false
 ) : Broker {
 
     init {
@@ -56,14 +55,10 @@ class BrokerRedis(
 
     // Redis client.
     private val redisClient = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (useCluster) {
-            createRedisClusterClient(
-                List(6) {
-                    RedisNode("localhost", 7000 + it)
-                }
-            )
+        if (listRedisNode.size > 1) {
+            createRedisClusterClient(listRedisNode)
         } else {
-            createRedisClient(redisNode)
+            createRedisClient(listRedisNode.first())
         }
     })
 
@@ -74,7 +69,7 @@ class BrokerRedis(
 
     // Connection pool.
     private val connectionPool = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (useCluster) {
+        if (listRedisNode.size > 1) {
             createClusterConnectionPool(dbConnectionPoolSize, redisClient as RedisClusterClient)
         } else {
             createConnectionPool(dbConnectionPoolSize, redisClient as RedisClient)
