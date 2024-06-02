@@ -78,8 +78,8 @@ class BrokerRedis(
         }
     })
 
-    // Connection to asynchronous subscribe, unsubscribe and publish.
-    private val pubConnection = retryExecutor.execute({ BrokerConnectionException() }, {
+    // Connection to asynchronous subscribe and unsubscribe.
+    private val subConnection = retryExecutor.execute({ BrokerConnectionException() }, {
         when (redisClient) {
             is RedisClient -> redisClient.connectPubSub()
             is RedisClusterClient -> redisClient.connectPubSub()
@@ -87,7 +87,8 @@ class BrokerRedis(
         }
     })
 
-    private val subConnection = retryExecutor.execute({ BrokerConnectionException() }, {
+    // Connection to asynchronous publish.
+    private val pubConnection = retryExecutor.execute({ BrokerConnectionException() }, {
         when (redisClient) {
             is RedisClient -> redisClient.connectPubSub()
             is RedisClusterClient -> redisClient.connectPubSub()
@@ -106,7 +107,7 @@ class BrokerRedis(
 
     // Retry condition.
     private val retryCondition: (throwable: Throwable) -> Boolean = { throwable ->
-        !(throwable is RedisException && (!pubConnection.isOpen || !subConnection.isOpen || connectionPool.isClosed))
+        !(throwable is RedisException && (!subConnection.isOpen || !pubConnection.isOpen || connectionPool.isClosed))
     }
 
     private val singletonRedisPubSubAdapter = object : RedisPubSubAdapter<String, String>() {
@@ -125,7 +126,7 @@ class BrokerRedis(
 
     init {
         // Add a listener.
-        pubConnection.addListener(singletonRedisPubSubAdapter)
+        subConnection.addListener(singletonRedisPubSubAdapter)
     }
 
     override fun subscribe(topic: String, handler: (event: Event) -> Unit): () -> Unit {
@@ -152,7 +153,8 @@ class BrokerRedis(
         if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
 
         isShutdown = true
-        pubConnection.removeListener(singletonRedisPubSubAdapter)
+        subConnection.removeListener(singletonRedisPubSubAdapter)
+        subConnection.close()
         pubConnection.close()
         connectionPool.close()
         redisClient.shutdown()
@@ -183,7 +185,7 @@ class BrokerRedis(
     private fun subscribeTopic(topic: String) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             logger.info("subscribe new topic '{}'", prefix + topic)
-            pubConnection.async().subscribe(prefix + topic)
+            subConnection.async().subscribe(prefix + topic)
         }, retryCondition)
     }
 
@@ -196,7 +198,7 @@ class BrokerRedis(
     private fun unsubscribeTopic(topic: String) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             logger.info("unsubscribe gone topic '{}'", prefix + topic)
-            pubConnection.async().unsubscribe(prefix + topic)
+            subConnection.async().unsubscribe(prefix + topic)
         }, retryCondition)
     }
 
@@ -218,7 +220,7 @@ class BrokerRedis(
                     isLast = isLastMessage
                 )
             )
-            subConnection.async().publish(prefix + topic, eventJson)
+            pubConnection.async().publish(prefix + topic, eventJson)
             logger.info("publish topic '{}' event '{}'", topic, eventJson)
         }, retryCondition)
     }

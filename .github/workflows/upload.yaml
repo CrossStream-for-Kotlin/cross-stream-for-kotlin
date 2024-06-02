@@ -1,0 +1,22 @@
+name: Upload to GitHub Packages
+
+on:
+  push:
+    paths:
+      ['cs4k/build.gradle.kts', 'demo/jvm/build.gradle.kts']
+
+jobs:
+  build:
+    name: Upload to GitHub Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Java 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: 17
+      - name: Uploading package
+        env:
+          GITHUB_TOKEN_WITH_PACKAGE_PERMISSIONS: ${{ secrets.OSSRH_TOKEN }}
+          GITHUB_USER: ${{ secrets.OSSRH_USR }}
+        run: ./cs4k/gradlew -p cs4k publish
