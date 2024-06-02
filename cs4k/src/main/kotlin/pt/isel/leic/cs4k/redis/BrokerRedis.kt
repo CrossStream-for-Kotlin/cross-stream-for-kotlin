@@ -69,7 +69,6 @@ class BrokerRedis(
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
-    /*
     // Redis client.
     private val redisClient = retryExecutor.execute({ BrokerConnectionException() }, {
         if (isCluster) {
@@ -79,51 +78,35 @@ class BrokerRedis(
         }
     })
 
-     */
-
-    private val redisClient = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (!isCluster) createRedisClient(redisNodes.first()) else null
-    })
-
-    private val redisClusterClient = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (isCluster) createRedisClusterClient(redisNodes) else null
-    })
-
     // Connection to asynchronous subscribe, unsubscribe and publish.
-    private val pubSubConnection = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (!isCluster) redisClient?.connectPubSub() else null
+    private val pubConnection = retryExecutor.execute({ BrokerConnectionException() }, {
+        when (redisClient) {
+            is RedisClient -> redisClient.connectPubSub()
+            is RedisClusterClient -> redisClient.connectPubSub()
+            else -> throw IllegalArgumentException("Unsupported client.")
+        }
     })
 
-    private val pubSubClusterConnection = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (isCluster) redisClusterClient?.connectPubSub() else null
+    private val subConnection = retryExecutor.execute({ BrokerConnectionException() }, {
+        when (redisClient) {
+            is RedisClient -> redisClient.connectPubSub()
+            is RedisClusterClient -> redisClient.connectPubSub()
+            else -> throw IllegalArgumentException("Unsupported client.")
+        }
     })
 
     // Connection pool.
-    private val connectionPool: GenericObjectPool<StatefulRedisConnection<String, String>>? =
-        retryExecutor.execute({ BrokerConnectionException() }, {
-            if (!isCluster) redisClient?.let { createConnectionPool(dbConnectionPoolSize, it) } else null
-        })
-
-    private val clusterConnectionPool: GenericObjectPool<StatefulRedisClusterConnection<String, String>>? =
-        retryExecutor.execute({ BrokerConnectionException() }, {
-            if (!isCluster) redisClusterClient?.let { createClusterConnectionPool(dbConnectionPoolSize, it) } else null
-        })
+    private val connectionPool = retryExecutor.execute({ BrokerConnectionException() }, {
+        when (redisClient) {
+            is RedisClient -> createConnectionPool(dbConnectionPoolSize, redisClient)
+            is RedisClusterClient -> createClusterConnectionPool(dbConnectionPoolSize, redisClient)
+            else -> throw IllegalArgumentException("Unsupported client.")
+        }
+    })
 
     // Retry condition.
     private val retryCondition: (throwable: Throwable) -> Boolean = { throwable ->
-        !(
-            throwable is RedisException &&
-                (
-                    (
-                        pubSubConnection != null && connectionPool != null &&
-                            (!pubSubConnection.isOpen || connectionPool.isClosed) ||
-                            (
-                                pubSubClusterConnection != null && clusterConnectionPool != null &&
-                                    (!pubSubClusterConnection.isOpen || clusterConnectionPool.isClosed)
-                                )
-                        )
-                    )
-            )
+        !(throwable is RedisException && (!pubConnection.isOpen || !subConnection.isOpen || connectionPool.isClosed))
     }
 
     private val singletonRedisPubSubAdapter = object : RedisPubSubAdapter<String, String>() {
@@ -142,11 +125,7 @@ class BrokerRedis(
 
     init {
         // Add a listener.
-        if (isCluster) {
-            pubSubClusterConnection?.addListener(singletonRedisPubSubAdapter)
-        } else {
-            pubSubConnection?.addListener(singletonRedisPubSubAdapter)
-        }
+        pubConnection.addListener(singletonRedisPubSubAdapter)
     }
 
     override fun subscribe(topic: String, handler: (event: Event) -> Unit): () -> Unit {
@@ -171,18 +150,12 @@ class BrokerRedis(
 
     override fun shutdown() {
         if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
+
         isShutdown = true
-        if (isCluster) {
-            pubSubClusterConnection?.removeListener(singletonRedisPubSubAdapter)
-            pubSubClusterConnection?.close()
-            clusterConnectionPool?.close()
-            redisClusterClient?.shutdown()
-        } else {
-            pubSubConnection?.removeListener(singletonRedisPubSubAdapter)
-            pubSubConnection?.close()
-            connectionPool?.close()
-            redisClient?.shutdown()
-        }
+        pubConnection.removeListener(singletonRedisPubSubAdapter)
+        pubConnection.close()
+        connectionPool.close()
+        redisClient.shutdown()
     }
 
     /**
@@ -210,11 +183,7 @@ class BrokerRedis(
     private fun subscribeTopic(topic: String) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             logger.info("subscribe new topic '{}'", prefix + topic)
-            if (isCluster) {
-                pubSubClusterConnection?.async()?.subscribe(prefix + topic)
-            } else {
-                pubSubConnection?.async()?.subscribe(prefix + topic)
-            }
+            pubConnection.async().subscribe(prefix + topic)
         }, retryCondition)
     }
 
@@ -227,11 +196,7 @@ class BrokerRedis(
     private fun unsubscribeTopic(topic: String) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             logger.info("unsubscribe gone topic '{}'", prefix + topic)
-            if (isCluster) {
-                pubSubClusterConnection?.async()?.unsubscribe(prefix + topic)
-            } else {
-                pubSubConnection?.async()?.unsubscribe(prefix + topic)
-            }
+            pubConnection.async().unsubscribe(prefix + topic)
         }, retryCondition)
     }
 
@@ -253,11 +218,7 @@ class BrokerRedis(
                     isLast = isLastMessage
                 )
             )
-            if (isCluster) {
-                pubSubClusterConnection?.async()?.publish(prefix + topic, eventJson)
-            } else {
-                pubSubConnection?.async()?.publish(prefix + topic, eventJson)
-            }
+            subConnection.async().publish(prefix + topic, eventJson)
             logger.info("publish topic '{}' event '{}'", topic, eventJson)
         }, retryCondition)
     }
@@ -272,41 +233,24 @@ class BrokerRedis(
      * @param isLast Indicates if the message is the last one.
      * @return The event id.
      */
-    private fun getEventIdAndUpdateHistory(topic: String, message: String, isLast: Boolean): Long {
-        val id = if (isCluster) {
-            clusterConnectionPool?.let {
-                it.borrowObject().use { conn ->
-                    conn.sync().eval<Long>(
-                        GET_EVENT_ID_AND_UPDATE_HISTORY_SCRIPT,
-                        ScriptOutputType.INTEGER,
-                        arrayOf(prefix + topic),
-                        Event.Prop.ID.key,
-                        Event.Prop.MESSAGE.key,
-                        message,
-                        Event.Prop.IS_LAST.key,
-                        isLast.toString()
-                    )
-                }
+    private fun getEventIdAndUpdateHistory(topic: String, message: String, isLast: Boolean): Long =
+        connectionPool.borrowObject().use { conn ->
+            val syncCommands = when (conn) {
+                is StatefulRedisConnection -> conn.sync()
+                is StatefulRedisClusterConnection -> conn.sync()
+                else -> throw IllegalArgumentException("Unsupported client.")
             }
-        } else {
-            connectionPool?.let {
-                it.borrowObject().use { conn ->
-                    val syncCommands = conn.sync()
-                    syncCommands.eval<Long>(
-                        GET_EVENT_ID_AND_UPDATE_HISTORY_SCRIPT,
-                        ScriptOutputType.INTEGER,
-                        arrayOf(prefix + topic),
-                        Event.Prop.ID.key,
-                        Event.Prop.MESSAGE.key,
-                        message,
-                        Event.Prop.IS_LAST.key,
-                        isLast.toString()
-                    )
-                }
-            }
+            syncCommands.eval(
+                GET_EVENT_ID_AND_UPDATE_HISTORY_SCRIPT,
+                ScriptOutputType.INTEGER,
+                arrayOf(prefix + topic),
+                Event.Prop.ID.key,
+                Event.Prop.MESSAGE.key,
+                message,
+                Event.Prop.IS_LAST.key,
+                isLast.toString()
+            )
         }
-        return id!!
-    }
 
     /**
      * Get the last event from the topic.
@@ -317,34 +261,21 @@ class BrokerRedis(
      */
     private fun getLastEvent(topic: String): Event? =
         retryExecutor.execute({ BrokerLostConnectionException() }, {
-            if (isCluster) {
-                clusterConnectionPool?.let {
-                    val map = it.borrowObject().use { conn ->
-                        conn.sync().hgetall(prefix + topic)
-                    }
-                    val id = map[Event.Prop.ID.key]?.toLong()
-                    val message = map[Event.Prop.MESSAGE.key]
-                    val isLast = map[Event.Prop.IS_LAST.key]?.toBoolean()
-                    return@execute if (id != null && message != null && isLast != null) {
-                        Event(topic, id, message, isLast)
-                    } else {
-                        null
-                    }
+            val map = connectionPool.borrowObject().use { conn ->
+                val syncCommands = when (conn) {
+                    is StatefulRedisConnection -> conn.sync()
+                    is StatefulRedisClusterConnection -> conn.sync()
+                    else -> throw IllegalArgumentException("Unsupported client.")
                 }
+                syncCommands.hgetall(prefix + topic)
+            }
+            val id = map[Event.Prop.ID.key]?.toLong()
+            val message = map[Event.Prop.MESSAGE.key]
+            val isLast = map[Event.Prop.IS_LAST.key]?.toBoolean()
+            return@execute if (id != null && message != null && isLast != null) {
+                Event(topic, id, message, isLast)
             } else {
-                connectionPool?.let {
-                    val map = it.borrowObject().use { conn ->
-                        conn.sync().hgetall(prefix + topic)
-                    }
-                    val id = map[Event.Prop.ID.key]?.toLong()
-                    val message = map[Event.Prop.MESSAGE.key]
-                    val isLast = map[Event.Prop.IS_LAST.key]?.toBoolean()
-                    return@execute if (id != null && message != null && isLast != null) {
-                        Event(topic, id, message, isLast)
-                    } else {
-                        null
-                    }
-                }
+                null
             }
         }, retryCondition)
 
