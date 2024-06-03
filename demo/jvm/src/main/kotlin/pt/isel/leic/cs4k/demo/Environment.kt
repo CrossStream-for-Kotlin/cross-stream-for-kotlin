@@ -17,7 +17,6 @@ object Environment {
     private const val KEY_HOSTNAME = "HOSTNAME"
     private const val KEY_SERVICE_NAME = "SERVICE_NAME"
 
-
     /**
      * Obtains a system variable with a given key.
      * @param key An environment variable key.

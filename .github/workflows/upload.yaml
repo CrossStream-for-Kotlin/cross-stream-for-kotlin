@@ -3,7 +3,7 @@ name: Upload to GitHub Packages
 on:
   push:
     paths:
-      ['cs4k/build.gradle.kts', 'demo/jvm/build.gradle.kts']
+      ['cs4k/build.gradle.kts']
 
 jobs:
   build:
