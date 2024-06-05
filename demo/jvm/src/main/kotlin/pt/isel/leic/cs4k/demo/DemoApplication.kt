@@ -32,7 +32,9 @@ class DemoApplication {
             )
 
             2F -> BrokerRedis(
-                RedisNode(Environment.getRedisHost(), Environment.getRedisPort())
+                RedisNode(Environment.getRedisHost(), Environment.getRedisPort()),
+                identifier = node,
+                enableLogging = true
             )
 
             3F -> BrokerRabbit(
