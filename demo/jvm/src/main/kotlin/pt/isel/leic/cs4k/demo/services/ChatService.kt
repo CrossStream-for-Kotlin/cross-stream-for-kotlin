@@ -41,11 +41,17 @@ class ChatService(val broker: Broker) {
             topic = group ?: generalGroup,
             handler = { event ->
                 try {
-                    val messageReceived = deserializeJsonToMessage(event.message)
+                    val message =
+                        if (event.topic != Broker.SYSTEM_TOPIC) {
+                            val message = deserializeJsonToMessage(event.message)
+                            MessageOutputModel(message.message, subscribedNode, message.publishingNode)
+                        } else {
+                            MessageOutputModel(event.message)
+                        }
                     SseEvent.Message(
                         name = event.topic,
                         id = event.id,
-                        data = MessageOutputModel(subscribedNode, messageReceived.message, messageReceived.publishingNode)
+                        data = message
                     ).writeTo(
                         sseEmitter
                     )

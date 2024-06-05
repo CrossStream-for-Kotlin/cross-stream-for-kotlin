@@ -15,13 +15,13 @@ repositories {
     mavenCentral()
 
     // For CS4K Library.
-    maven {
+    /* maven {
         url = uri("https://maven.pkg.github.com/CrossStream-for-Kotlin/cross-stream-for-kotlin")
         credentials {
             username = System.getenv("GITHUB_USER")
             password = System.getenv("GITHUB_TOKEN_WITH_PACKAGE_PERMISSIONS")
         }
-    }
+    } */
 }
 
 dependencies {

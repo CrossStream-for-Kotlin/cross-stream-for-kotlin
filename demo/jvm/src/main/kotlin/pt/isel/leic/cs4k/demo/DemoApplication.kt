@@ -13,15 +13,22 @@ import pt.isel.leic.cs4k.rabbitmq.BrokerRabbit
 import pt.isel.leic.cs4k.rabbitmq.RabbitNode
 import pt.isel.leic.cs4k.redis.BrokerRedis
 import pt.isel.leic.cs4k.redis.RedisNode
+import java.lang.management.ManagementFactory
 
 @SpringBootApplication
 class DemoApplication {
+
+    private val runtimeBean = ManagementFactory.getRuntimeMXBean()
+    private val pidHostInfo = runtimeBean.name.split("@")
+    private val node = pidHostInfo.getOrElse(1) { "Unavailable" }
 
     @Bean
     fun broker(): Broker =
         when (Environment.getCS4KOption()) {
             1F -> BrokerPostgreSQL(
-                Environment.getPostgreSqlDbUrl()
+                Environment.getPostgreSqlDbUrl(),
+                identifier = node,
+                enableLogging = true
             )
 
             2F -> BrokerRedis(
