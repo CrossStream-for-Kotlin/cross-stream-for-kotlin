@@ -47,6 +47,18 @@ class BrokerRedisTests {
         }
     }
 
+    @Test
+    fun `cannot create a BrokerRedis with a empty list of nodes`() {
+        // Arrange
+        // Act
+        // Assert
+        assertFailsWith<BrokerException.NodeListIsEmptyException> {
+            BrokerRedis(
+                emptyList<RedisNode>()
+            )
+        }
+    }
+
     companion object {
         private const val ACCEPTABLE_CONNECTION_POOL_SIZE = 10
         private const val BIG_CONNECTION_POOL_SIZE = 10_000

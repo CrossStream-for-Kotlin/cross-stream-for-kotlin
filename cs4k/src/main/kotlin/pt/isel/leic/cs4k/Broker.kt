@@ -2,6 +2,7 @@ package pt.isel.leic.cs4k
 
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
+import pt.isel.leic.cs4k.common.BrokerException.UnauthorizedTopicException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.Event
 
@@ -31,6 +32,8 @@ interface Broker {
      * @throws BrokerTurnOffException If the broker is turned off.
      * @throws BrokerLostConnectionException If the broker lost connection to the external system.
      * @throws UnexpectedBrokerException If something unexpected happens.
+     * @throws UnauthorizedTopicException If the subscribed topic is [SYSTEM_TOPIC].
+     *
      */
     fun publish(topic: String, message: String, isLastMessage: Boolean = false)
 

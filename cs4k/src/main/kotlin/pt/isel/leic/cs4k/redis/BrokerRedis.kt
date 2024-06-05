@@ -13,27 +13,34 @@ import org.apache.commons.pool2.impl.GenericObjectPool
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
+import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
 import pt.isel.leic.cs4k.common.BrokerException.BrokerConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
+import pt.isel.leic.cs4k.common.BrokerException.NodeListIsEmptyException
+import pt.isel.leic.cs4k.common.BrokerException.UnauthorizedTopicException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.BrokerSerializer
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
 import pt.isel.leic.cs4k.common.Utils
-import java.util.*
+import java.util.UUID
 
 /**
  * Broker Redis - Cluster.
  *
  * @property redisNodes The list of Redis nodes.
  * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
+ * @property identifier Identifier of instance/node used in logging mode.
+ * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
 class BrokerRedis(
     private val redisNodes: List<RedisNode>,
-    private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE
+    private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
+    private val identifier: String = UNKNOWN_IDENTIFIER,
+    private val enableLogging: Boolean = false
 ) : Broker {
 
     /**
@@ -41,16 +48,23 @@ class BrokerRedis(
      *
      * @property redisNode The Redis node.
      * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
+     * @property identifier Identifier of instance/node used in logging mode.
+     * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
      */
     constructor(
         redisNode: RedisNode,
-        dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE
+        dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
+        identifier: String = UNKNOWN_IDENTIFIER,
+        enableLogging: Boolean = false
     ) :
-        this(listOf(redisNode), dbConnectionPoolSize)
+        this(listOf(redisNode), dbConnectionPoolSize, identifier, enableLogging)
 
     init {
         // Check database connection pool size.
         Utils.checkDbConnectionPoolSize(dbConnectionPoolSize)
+
+        // Check node list.
+        if (redisNodes.isEmpty()) throw NodeListIsEmptyException()
     }
 
     // Check if it is cluster.
@@ -137,6 +151,7 @@ class BrokerRedis(
             subscribeTopic(topic)
         }
         logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
+        publishMessageToCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
 
         getLastEvent(topic)?.let { event -> handler(event) }
 
@@ -145,6 +160,7 @@ class BrokerRedis(
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
         if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
+        if (topic == SYSTEM_TOPIC) throw UnauthorizedTopicException()
 
         publishMessage(topic, message, isLastMessage)
     }
@@ -174,6 +190,7 @@ class BrokerRedis(
             onTopicRemove = { unsubscribeTopic(topic) }
         )
         logger.info("unsubscribe topic '{}' id '{}'", topic, subscriber.id)
+        publishMessageToCs4kSystem("unsubscribe topic '$topic' id '${subscriber.id}'")
     }
 
     /**
@@ -223,6 +240,7 @@ class BrokerRedis(
             pubConnection.async().publish(prefix + topic, eventJson)
             logger.info("publish topic '{}' event '{}'", topic, eventJson)
         }, retryCondition)
+        if (topic != SYSTEM_TOPIC) publishMessageToCs4kSystem("publish topic '$topic' event message '$message'")
     }
 
     /**
@@ -281,6 +299,21 @@ class BrokerRedis(
             }
         }, retryCondition)
 
+    /**
+     * Publish topic [SYSTEM_TOPIC] with the message.
+     *
+     * @param message The message to send.
+     */
+    private fun publishMessageToCs4kSystem(message: String) {
+        if (enableLogging) {
+            publishMessage(
+                topic = SYSTEM_TOPIC,
+                message = "[$identifier] $message",
+                isLastMessage = false
+            )
+        }
+    }
+
     private companion object {
 
         // Logger instance for logging Broker class information.
@@ -293,6 +326,8 @@ class BrokerRedis(
             redis.call('hmset', KEYS[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5])
             return id
         """.trimIndent()
+
+        private const val UNKNOWN_IDENTIFIER = "UNKNOWN"
 
         /**
          * Create a redis client for database interactions.

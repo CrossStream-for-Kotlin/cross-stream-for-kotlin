@@ -45,6 +45,13 @@ sealed class BrokerException(msg: String) : Exception(msg) {
      */
     class UnauthorizedTopicException(msg: String = UNAUTHORIZED_TOPIC_DEFAULT_MESSAGE) : BrokerException(msg)
 
+    /**
+     * Node list is empty.
+     *
+     * @param msg The message to show.
+     */
+    class NodeListIsEmptyException(msg: String = NODE_LIST_IS_EMPTY_DEFAULT_MESSAGE) : BrokerException(msg)
+
     private companion object {
         private const val UNEXPECTED_BROKER_EXCEPTION_DEFAULT_MESSAGE =
             "Something unexpected happened, try again later."
@@ -57,5 +64,8 @@ sealed class BrokerException(msg: String) : Exception(msg) {
 
         private const val UNAUTHORIZED_TOPIC_DEFAULT_MESSAGE =
             "Unauthorized topic."
+
+        private const val NODE_LIST_IS_EMPTY_DEFAULT_MESSAGE =
+            "Node list is empty."
     }
 }

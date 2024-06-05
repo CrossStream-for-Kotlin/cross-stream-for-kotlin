@@ -30,6 +30,8 @@ import kotlin.concurrent.thread
  *
  * @property postgreSQLDbUrl The PostgreSQL database URL.
  * @property dbConnectionPoolSize The maximum size that the JDBC connection pool is allowed to reach.
+ * @property identifier Identifier of instance/node used in logging mode.
+ * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
 class BrokerPostgreSQL(
     private val postgreSQLDbUrl: String,
@@ -330,6 +332,11 @@ class BrokerPostgreSQL(
         }, retryCondition)
     }
 
+    /**
+     * Notify the topic [SYSTEM_TOPIC] with the message.
+     *
+     * @param message The message to send.
+     */
     private fun notifyCs4kSystem(message: String) {
         if (enableLogging) {
             notify(
