@@ -43,12 +43,16 @@ class DemoApplication {
 
             4.1F -> BrokerIndependent(
                 Environment.getHostname(),
-                MulticastServiceDiscoveryConfig(Environment.getHostname())
+                MulticastServiceDiscoveryConfig(Environment.getHostname()),
+                identifier = node,
+                enableLogging = true
             )
 
             4.2F -> BrokerIndependent(
                 Environment.getHostname(),
-                DNSServiceDiscoveryConfig(Environment.getHostname(), Environment.getServiceName())
+                DNSServiceDiscoveryConfig(Environment.getHostname(), Environment.getServiceName()),
+                identifier = node,
+                enableLogging = true
             )
 
             else -> throw Exception("Missing environment variable $CS4K_OPTION.")

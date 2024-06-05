@@ -48,5 +48,7 @@ interface Broker {
     companion object {
         // System topic for logging.
         const val SYSTEM_TOPIC = "cs4k_system"
+
+        const val UNKNOWN_IDENTIFIER = "UNKNOWN"
     }
 }

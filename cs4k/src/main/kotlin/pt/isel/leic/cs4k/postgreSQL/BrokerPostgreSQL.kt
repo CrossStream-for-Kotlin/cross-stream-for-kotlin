@@ -7,6 +7,7 @@ import org.postgresql.util.PSQLException
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
+import pt.isel.leic.cs4k.Broker.Companion.UNKNOWN_IDENTIFIER
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
 import pt.isel.leic.cs4k.common.BrokerException.BrokerConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
@@ -355,8 +356,6 @@ class BrokerPostgreSQL(
         private const val BLOCK_UNTIL_NEW_NOTIFICATIONS = 0
 
         private const val UNIQUE_VIOLATION_SQLSTATE = "23505"
-
-        private const val UNKNOWN_IDENTIFIER = "UNKNOWN"
 
         /**
          * Create a connection poll for database interactions.

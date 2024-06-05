@@ -10,7 +10,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
+import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
+import pt.isel.leic.cs4k.Broker.Companion.UNKNOWN_IDENTIFIER
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
+import pt.isel.leic.cs4k.common.BrokerException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.BrokerSerializer
@@ -58,7 +61,9 @@ import kotlin.time.Duration
  */
 class BrokerIndependent(
     private val hostname: String,
-    private val serviceDiscoveryConfig: ServiceDiscoveryConfig
+    private val serviceDiscoveryConfig: ServiceDiscoveryConfig,
+    private val identifier: String = UNKNOWN_IDENTIFIER,
+    private val enableLogging: Boolean = false
 ) : Broker {
 
     // Shutdown state.
@@ -322,6 +327,8 @@ class BrokerIndependent(
         val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
 
+        notifyCs4kSystem("[$identifier:$selfIp] new subscriber topic '$topic' id '${subscriber.id}'")
+
         logger.info("[{}] new subscriber topic '{}' id '{}'", selfIp, topic, subscriber.id)
 
         return { unsubscribe(topic, subscriber) }
@@ -329,12 +336,14 @@ class BrokerIndependent(
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
         if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
+        if (topic == SYSTEM_TOPIC) throw BrokerException.UnauthorizedTopicException()
 
         val event = Event(topic, IGNORE_EVENT_ID, message, isLastMessage)
         runBlocking {
             // Enqueue the event to be processed.
             controlQueue.enqueue(event)
         }
+        notifyCs4kSystem("[$identifier:$selfIp] publish topic '$topic' event '$event'")
 
         logger.info("[{}] publish topic '{}' event '{}'", selfIp, topic, event)
     }
@@ -355,7 +364,21 @@ class BrokerIndependent(
      */
     private fun unsubscribe(topic: String, subscriber: Subscriber) {
         associatedSubscribers.removeIf(topic, { sub -> sub.id == subscriber.id })
+        notifyCs4kSystem("[$identifier:$selfIp] unsubscribe topic '$topic' id '${subscriber.id}'")
         logger.info("[{}] unsubscribe topic '{}' id '{}'", selfIp, topic, subscriber.id)
+    }
+
+    /**
+     * Notify the topic [SYSTEM_TOPIC] with the message.
+     *
+     * @param message The message to send.
+     */
+    private fun notifyCs4kSystem(message: String) {
+        if (enableLogging) {
+            runBlocking {
+                controlQueue.enqueue(Event(SYSTEM_TOPIC, IGNORE_EVENT_ID, message, false))
+            }
+        }
     }
 
     private companion object {
