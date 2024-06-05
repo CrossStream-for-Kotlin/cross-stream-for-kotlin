@@ -8,9 +8,11 @@ import com.rabbitmq.client.DefaultConsumer
 import com.rabbitmq.client.Envelope
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
+import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
+import pt.isel.leic.cs4k.common.BrokerException.NodeListIsEmptyException
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
@@ -21,20 +23,47 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * Broker Rabbit - Cluster.
+ *
+ * @param clusterNodes The list of Rabbit nodes.
+ * @param username The username used as credentials for RabbitMQ.
+ * @param password The password used as credentials for RabbitMQ.
+ * @property identifier Identifier of instance/node used in logging mode.
+ * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
+ */
 class BrokerRabbit(
     clusterNodes: List<RabbitNode>,
     username: String = DEFAULT_USERNAME,
     password: String = DEFAULT_PASSWORD,
-    private val subscribeDelayInMillis: Long = DEFAULT_SUBSCRIBE_DELAY_MILLIS
+    private val subscribeDelayInMillis: Long = DEFAULT_SUBSCRIBE_DELAY_MILLIS,
+    private val identifier: String = UNKNOWN_IDENTIFIER,
+    private val enableLogging: Boolean = false
 ) : Broker {
 
+    /**
+     * Broker Rabbit - Single Node.
+     *
+     * @param node The rabbit node.
+     * @param username The username used as credentials for RabbitMQ.
+     * @param password The password used as credentials for RabbitMQ.
+     * @property identifier Identifier of instance/node used in logging mode.
+     * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
+     */
     constructor(
         node: RabbitNode,
         username: String = DEFAULT_USERNAME,
         password: String = DEFAULT_PASSWORD,
-        subscribeDelayInMillis: Long = DEFAULT_SUBSCRIBE_DELAY_MILLIS
+        subscribeDelayInMillis: Long = DEFAULT_SUBSCRIBE_DELAY_MILLIS,
+        identifier: String = UNKNOWN_IDENTIFIER,
+        enableLogging: Boolean = false
     ) :
-        this(listOf(node), username, password, subscribeDelayInMillis)
+        this(listOf(node), username, password, subscribeDelayInMillis, identifier, enableLogging)
+
+    init {
+        // Checking node list.
+        if (clusterNodes.isEmpty()) throw NodeListIsEmptyException()
+    }
 
     // Association between topics and subscribers lists.
     private val associatedSubscribers = AssociatedSubscribers()
@@ -280,6 +309,7 @@ class BrokerRabbit(
         val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
         logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
+        publishCs4kSystem("new subscriber topic $topic id ${subscriber.id}")
 
         getLastEvent(topic)?.let { event -> handler(event) }
 
@@ -300,16 +330,33 @@ class BrokerRabbit(
     private fun unsubscribe(topic: String, subscriber: Subscriber) {
         associatedSubscribers.removeIf(topic, { it.id.toString() == subscriber.id.toString() })
         logger.info("unsubscribe topic '{}' id '{}", topic, subscriber.id)
+        publishCs4kSystem("unsubscribe topic $topic id ${subscriber.id}")
     }
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
         if (isShutdown.get()) throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        publishToStream(topic, message, isLastMessage)
+    }
+
+    private fun publishToStream(topic: String, message: String, isLastMessage: Boolean) {
         val body = Message.serialize(Message(topic, message, isLastMessage)).toByteArray()
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             val channel = publishingChannelPool.getChannel()
             channel.basicPublish("", streamName, null, body)
             publishingChannelPool.stopUsingChannel(channel)
         }, retryCondition)
+        logger.info("publish topic '{}' event message '{}'", topic, message)
+        if (topic != Broker.SYSTEM_TOPIC) publishCs4kSystem("notify topic $topic event message $message")
+    }
+
+    private fun publishCs4kSystem(message: String) {
+        if (enableLogging) {
+            publishToStream(
+                Broker.SYSTEM_TOPIC,
+                "[$identifier] $message",
+                false
+            )
+        }
     }
 
     override fun shutdown() {
@@ -339,6 +386,8 @@ class BrokerRabbit(
         // Default credentials to access RabbitMQ.
         private const val DEFAULT_USERNAME = "guest"
         private const val DEFAULT_PASSWORD = "guest"
+
+        private const val UNKNOWN_IDENTIFIER = "UNKNOWN"
 
         /**
          * Creates the creator of connections for accessing RabbitMQ broker.

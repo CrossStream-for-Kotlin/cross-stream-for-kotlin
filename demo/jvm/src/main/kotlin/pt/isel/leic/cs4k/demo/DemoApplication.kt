@@ -38,7 +38,9 @@ class DemoApplication {
             )
 
             3F -> BrokerRabbit(
-                RabbitNode(Environment.getRabbitHost(), Environment.getRabbitPort())
+                RabbitNode(Environment.getRabbitHost(), Environment.getRabbitPort()),
+                identifier = node,
+                enableLogging = true
             )
 
             4.1F -> BrokerIndependent(
