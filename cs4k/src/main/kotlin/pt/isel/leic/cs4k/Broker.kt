@@ -41,4 +41,9 @@ interface Broker {
      * @throws BrokerLostConnectionException If the broker lost connection to the external system.
      */
     fun shutdown()
+
+    companion object {
+        // System topic for logging.
+        const val SYSTEM_TOPIC = "cs4k_system"
+    }
 }

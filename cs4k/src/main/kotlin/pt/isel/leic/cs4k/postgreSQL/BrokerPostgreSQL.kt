@@ -6,10 +6,12 @@ import org.postgresql.PGConnection
 import org.postgresql.util.PSQLException
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
+import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
 import pt.isel.leic.cs4k.common.BrokerException.BrokerConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
+import pt.isel.leic.cs4k.common.BrokerException.UnauthorizedTopicException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.BrokerSerializer
 import pt.isel.leic.cs4k.common.Event
@@ -20,7 +22,7 @@ import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.Listen
 import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.UnListen
 import java.sql.Connection
 import java.sql.SQLException
-import java.util.UUID
+import java.util.*
 import kotlin.concurrent.thread
 
 /**
@@ -31,7 +33,9 @@ import kotlin.concurrent.thread
  */
 class BrokerPostgreSQL(
     private val postgreSQLDbUrl: String,
-    private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE
+    private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
+    private val identifier: String = UNKNOWN_IDENTIFIER,
+    private val enableLogging: Boolean = false
 ) : Broker {
 
     init {
@@ -80,6 +84,7 @@ class BrokerPostgreSQL(
         val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
         logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
+        notifyCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
 
         getLastEvent(topic)?.let { event -> handler(event) }
 
@@ -88,6 +93,7 @@ class BrokerPostgreSQL(
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
         if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
+        if (topic == SYSTEM_TOPIC) throw UnauthorizedTopicException()
 
         notify(topic, message, isLastMessage)
     }
@@ -109,6 +115,7 @@ class BrokerPostgreSQL(
     private fun unsubscribe(topic: String, subscriber: Subscriber) {
         associatedSubscribers.removeIf(topic, { sub -> sub.id == subscriber.id })
         logger.info("unsubscribe topic '{}' id '{}'", topic, subscriber.id)
+        notifyCs4kSystem("unsubscribe topic '$topic' id '${subscriber.id}'")
     }
 
     /**
@@ -226,6 +233,7 @@ class BrokerPostgreSQL(
                 }
             }
         }, retryCondition)
+        if (topic != SYSTEM_TOPIC) notifyCs4kSystem("notify topic '$topic' event message '$message'")
     }
 
     /**
@@ -322,6 +330,16 @@ class BrokerPostgreSQL(
         }, retryCondition)
     }
 
+    private fun notifyCs4kSystem(message: String) {
+        if (enableLogging) {
+            notify(
+                topic = SYSTEM_TOPIC,
+                message = "[$identifier] $message",
+                isLastMessage = false
+            )
+        }
+    }
+
     private companion object {
         // Logger instance for logging Broker class information.
         private val logger = LoggerFactory.getLogger(BrokerPostgreSQL::class.java)
@@ -330,6 +348,8 @@ class BrokerPostgreSQL(
         private const val BLOCK_UNTIL_NEW_NOTIFICATIONS = 0
 
         private const val UNIQUE_VIOLATION_SQLSTATE = "23505"
+
+        private const val UNKNOWN_IDENTIFIER = "UNKNOWN"
 
         /**
          * Create a connection poll for database interactions.
