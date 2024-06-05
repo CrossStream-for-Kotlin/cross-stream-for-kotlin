@@ -20,6 +20,7 @@ class LoggingFilter : HttpFilter() {
 
         if (request is HttpServletRequest) {
             logger.info("NODE: $hostName, PID: $pid, REQUEST: ${request.requestURI}")
+            request.setAttribute("node", hostName)
         }
         chain.doFilter(request, response)
     }

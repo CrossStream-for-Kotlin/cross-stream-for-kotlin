@@ -12,7 +12,9 @@ function appendLine(lines: Array<string>, line: string): Array<string> {
 }
 
 type MessageOutputModel = {
+  subscribedNode: string;
   message: string;
+  publishingNode: string;
 };
 
 function eventSourceStatus(eventSource: EventSource) {
@@ -49,7 +51,10 @@ export function Listener({ group }: ListenerProps) {
     eventSource.addEventListener(group, ev => {
       const data: MessageOutputModel = JSON.parse(ev.data);
       setStatus(eventSourceStatus(eventSource));
-      setOutputLines(outputLines => appendLine(outputLines, data.message));
+      setOutputLines(outputLines => appendLine(
+          outputLines,
+          "[PUBLISHING NODE " + data.publishingNode + "] -> [SUBSCRIBED NODE " + data.subscribedNode + "] " + data.message
+      ));
     });
 
     eventSource.addEventListener('open', () => {

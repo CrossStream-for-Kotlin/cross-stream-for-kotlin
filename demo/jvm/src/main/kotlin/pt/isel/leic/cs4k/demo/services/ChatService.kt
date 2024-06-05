@@ -33,7 +33,7 @@ class ChatService(val broker: Broker) {
      * @param group The optional name of the group.
      * @return The Spring SSEEmitter.
      */
-    fun newListener(group: String?): SseEmitter {
+    fun newListener(group: String?, subscribedNode: String): SseEmitter {
         val sseEmitter = SseEmitter(TimeUnit.MINUTES.toMillis(30))
         lock.withLock { sseEmittersToKeepAlive.add(sseEmitter) }
 
@@ -45,7 +45,7 @@ class ChatService(val broker: Broker) {
                     SseEvent.Message(
                         name = event.topic,
                         id = event.id,
-                        data = MessageOutputModel(messageReceived.message)
+                        data = MessageOutputModel(subscribedNode, messageReceived.message, messageReceived.publishingNode)
                     ).writeTo(
                         sseEmitter
                     )
@@ -74,10 +74,10 @@ class ChatService(val broker: Broker) {
      * @param group The optional name of the group.
      * @param message The message to send to the group.
      */
-    fun sendMessage(group: String?, message: String) {
+    fun sendMessage(group: String?, message: String, publishingNode: String) {
         broker.publish(
             topic = group ?: generalGroup,
-            message = serializeMessageToJson(Message(message))
+            message = serializeMessageToJson(Message(message, publishingNode))
         )
     }
 
