@@ -8,9 +8,11 @@ import com.rabbitmq.client.DefaultConsumer
 import com.rabbitmq.client.Envelope
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
+import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
+import pt.isel.leic.cs4k.common.BrokerException.NodeListIsEmptyException
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
@@ -21,6 +23,15 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * Broker Rabbit - Cluster.
+ *
+ * @param clusterNodes The list of Rabbit nodes.
+ * @param username The username used as credentials for RabbitMQ.
+ * @param password The password used as credentials for RabbitMQ.
+ * @property identifier Identifier of instance/node used in logging mode.
+ * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
+ */
 class BrokerRabbit(
     clusterNodes: List<RabbitNode>,
     username: String = DEFAULT_USERNAME,
@@ -30,6 +41,15 @@ class BrokerRabbit(
     private val enableLogging: Boolean = false
 ) : Broker {
 
+    /**
+     * Broker Rabbit - Single Node.
+     *
+     * @param node The rabbit node.
+     * @param username The username used as credentials for RabbitMQ.
+     * @param password The password used as credentials for RabbitMQ.
+     * @property identifier Identifier of instance/node used in logging mode.
+     * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
+     */
     constructor(
         node: RabbitNode,
         username: String = DEFAULT_USERNAME,
@@ -41,7 +61,8 @@ class BrokerRabbit(
         this(listOf(node), username, password, subscribeDelayInMillis, identifier, enableLogging)
 
     init {
-        if (clusterNodes.isEmpty()) throw IllegalArgumentException()
+        // Checking node list.
+        if (clusterNodes.isEmpty()) throw NodeListIsEmptyException()
     }
 
     // Association between topics and subscribers lists.

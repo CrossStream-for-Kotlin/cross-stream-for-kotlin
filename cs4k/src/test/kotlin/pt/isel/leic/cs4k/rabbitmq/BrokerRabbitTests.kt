@@ -19,11 +19,10 @@ class BrokerRabbitTests {
 
     @Test
     fun `cannot create a BrokerRabbit with an empty cluster list`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<BrokerException.NodeListIsEmptyException> {
             BrokerRabbit(
                 emptyList()
             )
         }
     }
-
 }
