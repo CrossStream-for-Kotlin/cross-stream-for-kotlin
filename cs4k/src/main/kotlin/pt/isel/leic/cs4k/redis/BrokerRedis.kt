@@ -14,6 +14,7 @@ import org.apache.commons.pool2.impl.GenericObjectPoolConfig
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
+import pt.isel.leic.cs4k.Broker.Companion.UNKNOWN_IDENTIFIER
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
 import pt.isel.leic.cs4k.common.BrokerException.BrokerConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
@@ -326,8 +327,6 @@ class BrokerRedis(
             redis.call('hmset', KEYS[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5])
             return id
         """.trimIndent()
-
-        private const val UNKNOWN_IDENTIFIER = "UNKNOWN"
 
         /**
          * Create a redis client for database interactions.

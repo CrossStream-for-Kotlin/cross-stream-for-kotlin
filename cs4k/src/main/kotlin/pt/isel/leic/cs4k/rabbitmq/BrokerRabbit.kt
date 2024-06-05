@@ -9,6 +9,7 @@ import com.rabbitmq.client.Envelope
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
+import pt.isel.leic.cs4k.Broker.Companion.UNKNOWN_IDENTIFIER
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
@@ -19,7 +20,7 @@ import pt.isel.leic.cs4k.common.Subscriber
 import pt.isel.leic.cs4k.rabbitmq.HistoryShareMessage.HistoryShareMessageType.REQUEST
 import pt.isel.leic.cs4k.rabbitmq.HistoryShareMessage.HistoryShareMessageType.RESPONSE
 import java.io.IOException
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -386,8 +387,6 @@ class BrokerRabbit(
         // Default credentials to access RabbitMQ.
         private const val DEFAULT_USERNAME = "guest"
         private const val DEFAULT_PASSWORD = "guest"
-
-        private const val UNKNOWN_IDENTIFIER = "UNKNOWN"
 
         /**
          * Creates the creator of connections for accessing RabbitMQ broker.
