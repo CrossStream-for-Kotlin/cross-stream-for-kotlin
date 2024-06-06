@@ -86,10 +86,11 @@ class BrokerPostgreSQL(
 
         val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
-        logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
-        notifyCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
 
         getLastEvent(topic)?.let { event -> handler(event) }
+
+        logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
+        notifyCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
 
         return { unsubscribe(topic, subscriber) }
     }
