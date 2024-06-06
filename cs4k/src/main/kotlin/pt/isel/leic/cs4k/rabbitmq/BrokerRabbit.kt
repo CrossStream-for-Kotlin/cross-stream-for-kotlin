@@ -136,6 +136,7 @@ class BrokerRabbit(
             val offset = properties.headers["x-stream-offset"].toString().toLong()
             processMessage(message, offset)
             retryExecutor.execute({ BrokerLostConnectionException() }, {
+                channel.queueBind(brokerId, historyExchange, "")
                 channel.basicAck(envelope.deliveryTag, false)
             }, retryCondition)
         }
@@ -238,7 +239,7 @@ class BrokerRabbit(
      * from the stream, and they send the offset corresponding to the latest event received, it starts from there.
      */
     private fun listen() {
-        val offset = consumedTopics.getMaximumOffset(subscribeDelayInMillis.milliseconds) ?: "next"
+        val offset = consumedTopics.getMaximumOffset(subscribeDelayInMillis.milliseconds) ?: "first"
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             val channel = consumingChannelPool.getChannel()
             channel.basicQos(DEFAULT_PREFETCH_VALUE)
