@@ -151,10 +151,11 @@ class BrokerRedis(
         associatedSubscribers.addToKey(topic, subscriber) {
             subscribeTopic(topic)
         }
-        logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
-        publishMessageToCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
 
         getLastEvent(topic)?.let { event -> handler(event) }
+
+        logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
+        publishMessageToCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
 
         return { unsubscribe(topic, subscriber) }
     }

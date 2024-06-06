@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "pt.isel.leic.cs4k"
-version = "0.1.3"
+version = "0.1.4"
 
 repositories {
     mavenCentral()
