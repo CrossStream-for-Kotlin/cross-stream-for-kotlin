@@ -72,7 +72,7 @@ class ConsumedTopics {
             it.offset = maximumOffset
             it.continuation.resumeWith(Result.success(Unit))
         }
-        return info.toList()
+        return info.toList().sortedBy { it.offset }
     }
 
     /**
@@ -80,7 +80,7 @@ class ConsumedTopics {
      * @param events New information about topics.
      */
     fun fullUpdate(events: List<ConsumeInfo>) = lock.withLock {
-        events.forEach { eventEntry ->
+        events.sortedBy { it.offset }.forEach { eventEntry ->
             consumeInfoMap[eventEntry.lastEvent.topic] =
                 ConsumeInfo(
                     offset = eventEntry.offset,
