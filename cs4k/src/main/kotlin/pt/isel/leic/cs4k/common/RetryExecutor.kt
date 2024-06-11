@@ -5,8 +5,8 @@ import org.slf4j.LoggerFactory
 /**
  * Represents a retry mechanism.
  *
- * @param maxRetries The maximum number of retries.
- * @param waitTimeMillis The time to wait between retries.
+ * @property maxRetries The maximum number of retries.
+ * @property waitTimeMillis The time to wait between retries.
  */
 class RetryExecutor(
     private val maxRetries: Int = DEFAULT_MAX_RETRIES,
