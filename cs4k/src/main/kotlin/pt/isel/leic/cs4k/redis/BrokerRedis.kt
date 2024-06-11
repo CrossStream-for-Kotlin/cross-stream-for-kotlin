@@ -1,9 +1,11 @@
 package pt.isel.leic.cs4k.redis
 
+import io.lettuce.core.AbstractRedisClient
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisException
 import io.lettuce.core.RedisURI
 import io.lettuce.core.ScriptOutputType
+import io.lettuce.core.api.StatefulConnection
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.cluster.RedisClusterClient
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection
@@ -34,7 +36,7 @@ import java.util.UUID
  *
  * @property redisNodes The list of Redis nodes.
  * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
- * @property identifier Identifier of instance/node used in logging mode.
+ * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
 class BrokerRedis(
@@ -49,7 +51,7 @@ class BrokerRedis(
      *
      * @property redisNode The Redis node.
      * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
-     * @property identifier Identifier of instance/node used in logging mode.
+     * @property identifier Identifier of instance/node used in logs.
      * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
      */
     constructor(
@@ -86,38 +88,22 @@ class BrokerRedis(
 
     // Redis client.
     private val redisClient = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (isCluster) {
-            createRedisClusterClient(redisNodes)
-        } else {
-            createRedisClient(redisNodes.first())
-        }
+        if (isCluster) createRedisClusterClient(redisNodes) else createRedisClient(redisNodes.first())
     })
 
     // Connection to asynchronous subscribe and unsubscribe.
     private val subConnection = retryExecutor.execute({ BrokerConnectionException() }, {
-        when (redisClient) {
-            is RedisClient -> redisClient.connectPubSub()
-            is RedisClusterClient -> redisClient.connectPubSub()
-            else -> throw IllegalArgumentException("Unsupported client.")
-        }
+        createConnectPubSub(redisClient)
     })
 
     // Connection to asynchronous publish.
     private val pubConnection = retryExecutor.execute({ BrokerConnectionException() }, {
-        when (redisClient) {
-            is RedisClient -> redisClient.connectPubSub()
-            is RedisClusterClient -> redisClient.connectPubSub()
-            else -> throw IllegalArgumentException("Unsupported client.")
-        }
+        createConnectPubSub(redisClient)
     })
 
     // Connection pool.
     private val connectionPool = retryExecutor.execute({ BrokerConnectionException() }, {
-        when (redisClient) {
-            is RedisClient -> createConnectionPool(dbConnectionPoolSize, redisClient)
-            is RedisClusterClient -> createClusterConnectionPool(dbConnectionPoolSize, redisClient)
-            else -> throw IllegalArgumentException("Unsupported client.")
-        }
+        createConnectionPool(redisClient, dbConnectionPoolSize)
     })
 
     // Retry condition.
@@ -129,7 +115,7 @@ class BrokerRedis(
 
         override fun message(channel: String?, message: String?) {
             if (channel == null || message == null) throw UnexpectedBrokerException()
-            logger.info("new event '{}' channel '{}'", message, channel)
+            logger.info("[{}] new event '{}' channel '{}'", identifier, message, channel)
 
             val subscribers = associatedSubscribers.getAll(channel.substringAfter(prefix))
             if (subscribers.isNotEmpty()) {
@@ -154,7 +140,7 @@ class BrokerRedis(
 
         getLastEvent(topic)?.let { event -> handler(event) }
 
-        logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
+        logger.info("[{}] new subscriber topic '{}' id '{}'", identifier, topic, subscriber.id)
         publishMessageToCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
 
         return { unsubscribe(topic, subscriber) }
@@ -191,7 +177,7 @@ class BrokerRedis(
             predicate = { sub -> sub.id == subscriber.id },
             onTopicRemove = { unsubscribeTopic(topic) }
         )
-        logger.info("unsubscribe topic '{}' id '{}'", topic, subscriber.id)
+        logger.info("[{}] unsubscribe topic '{}' id '{}'", identifier, topic, subscriber.id)
         publishMessageToCs4kSystem("unsubscribe topic '$topic' id '${subscriber.id}'")
     }
 
@@ -203,7 +189,7 @@ class BrokerRedis(
      */
     private fun subscribeTopic(topic: String) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
-            logger.info("subscribe new topic '{}'", prefix + topic)
+            logger.info("[{}] subscribe new topic '{}'", identifier, prefix + topic)
             subConnection.async().subscribe(prefix + topic)
         }, retryCondition)
     }
@@ -216,7 +202,7 @@ class BrokerRedis(
      */
     private fun unsubscribeTopic(topic: String) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
-            logger.info("unsubscribe gone topic '{}'", prefix + topic)
+            logger.info("[{}] unsubscribe gone topic '{}'", identifier, prefix + topic)
             subConnection.async().unsubscribe(prefix + topic)
         }, retryCondition)
     }
@@ -228,6 +214,7 @@ class BrokerRedis(
      * @param message The message to send.
      * @param isLastMessage Indicates if the message is the last one.
      * @throws BrokerLostConnectionException If the broker lost connection to the database.
+     * @throws UnexpectedBrokerException If an invalid state exists.
      */
     private fun publishMessage(topic: String, message: String, isLastMessage: Boolean) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
@@ -240,7 +227,7 @@ class BrokerRedis(
                 )
             )
             pubConnection.async().publish(prefix + topic, eventJson)
-            logger.info("publish topic '{}' event '{}'", topic, eventJson)
+            logger.info("[{}] publish topic '{}' event '{}'", identifier, topic, eventJson)
         }, retryCondition)
         if (topic != SYSTEM_TOPIC) publishMessageToCs4kSystem("publish topic '$topic' event message '$message'")
     }
@@ -254,15 +241,11 @@ class BrokerRedis(
      * @param message The message.
      * @param isLast Indicates if the message is the last one.
      * @return The event id.
+     * @throws UnexpectedBrokerException If an invalid state exists.
      */
     private fun getEventIdAndUpdateHistory(topic: String, message: String, isLast: Boolean): Long =
         connectionPool.borrowObject().use { conn ->
-            val syncCommands = when (conn) {
-                is StatefulRedisConnection -> conn.sync()
-                is StatefulRedisClusterConnection -> conn.sync()
-                else -> throw IllegalArgumentException("Unsupported client.")
-            }
-            syncCommands.eval(
+            getSyncCommands(conn).eval(
                 GET_EVENT_ID_AND_UPDATE_HISTORY_SCRIPT,
                 ScriptOutputType.INTEGER,
                 arrayOf(prefix + topic),
@@ -280,16 +263,12 @@ class BrokerRedis(
      * @param topic The topic name.
      * @return The last event of the topic, or null if the topic does not exist yet.
      * @throws BrokerLostConnectionException If the broker lost connection to the database.
+     * @throws UnexpectedBrokerException If an invalid state exists.
      */
     private fun getLastEvent(topic: String): Event? =
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             val map = connectionPool.borrowObject().use { conn ->
-                val syncCommands = when (conn) {
-                    is StatefulRedisConnection -> conn.sync()
-                    is StatefulRedisClusterConnection -> conn.sync()
-                    else -> throw IllegalArgumentException("Unsupported client.")
-                }
-                syncCommands.hgetall(prefix + topic)
+                getSyncCommands(conn).hgetall(prefix + topic)
             }
             val id = map[Event.Prop.ID.key]?.toLong()
             val message = map[Event.Prop.MESSAGE.key]
@@ -302,7 +281,21 @@ class BrokerRedis(
         }, retryCondition)
 
     /**
-     * Publish topic [SYSTEM_TOPIC] with the message.
+     * Get the commands for synchronous API.
+     *
+     * @param conn The connection to use.
+     * @return The commands for synchronous API.
+     * @throws UnexpectedBrokerException If an invalid state exists.
+     */
+    private fun getSyncCommands(conn: StatefulConnection<String, String>) =
+        when (conn) {
+            is StatefulRedisConnection -> conn.sync()
+            is StatefulRedisClusterConnection -> conn.sync()
+            else -> throw UnexpectedBrokerException(UNSUPPORTED_STATE_DEFAULT_MESSAGE)
+        }
+
+    /**
+     * Publish topic [SYSTEM_TOPIC] with the message, if logging mode is active.
      *
      * @param message The message to send.
      */
@@ -317,7 +310,6 @@ class BrokerRedis(
     }
 
     private companion object {
-
         // Logger instance for logging Broker class information.
         private val logger = LoggerFactory.getLogger(BrokerRedis::class.java)
 
@@ -328,6 +320,9 @@ class BrokerRedis(
             redis.call('hmset', KEYS[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5])
             return id
         """.trimIndent()
+
+        // Unsupported state default message.
+        private const val UNSUPPORTED_STATE_DEFAULT_MESSAGE = "Unsupported state."
 
         /**
          * Create a redis client for database interactions.
@@ -355,10 +350,25 @@ class BrokerRedis(
          * Create a connection poll for database interactions.
          *
          * @param dbConnectionPoolSize The maximum size that the pool is allowed to reach.
+         * @param redisClient The redis client instance.
+         * @return The connection poll represented by a GenericObjectPool instance.
+         * @throws UnexpectedBrokerException If an invalid state exists.
+         */
+        private fun createConnectionPool(redisClient: AbstractRedisClient, dbConnectionPoolSize: Int) =
+            when (redisClient) {
+                is RedisClient -> createSingleNodeConnectionPool(dbConnectionPoolSize, redisClient)
+                is RedisClusterClient -> createClusterConnectionPool(dbConnectionPoolSize, redisClient)
+                else -> throw UnexpectedBrokerException(UNSUPPORTED_STATE_DEFAULT_MESSAGE)
+            }
+
+        /**
+         * Create a single node connection poll for database interactions.
+         *
+         * @param dbConnectionPoolSize The maximum size that the pool is allowed to reach.
          * @param client The redis client instance.
          * @return The connection poll represented by a GenericObjectPool instance.
          */
-        private fun createConnectionPool(
+        private fun createSingleNodeConnectionPool(
             dbConnectionPoolSize: Int,
             client: RedisClient
         ): GenericObjectPool<StatefulRedisConnection<String, String>> {
@@ -382,5 +392,19 @@ class BrokerRedis(
             pool.maxTotal = dbConnectionPoolSize
             return ConnectionPoolSupport.createGenericObjectPool({ clusterClient.connect() }, pool)
         }
+
+        /**
+         * Create a connection for publish-subscribe operations.
+         *
+         * @param redisClient The redis client instance.
+         * @return The connectPubSub represented by a StatefulRedisPubSubConnection instance.
+         * @throws UnexpectedBrokerException If an invalid state exists.
+         */
+        private fun createConnectPubSub(redisClient: AbstractRedisClient) =
+            when (redisClient) {
+                is RedisClient -> redisClient.connectPubSub()
+                is RedisClusterClient -> redisClient.connectPubSub()
+                else -> throw UnexpectedBrokerException(UNSUPPORTED_STATE_DEFAULT_MESSAGE)
+            }
     }
 }
