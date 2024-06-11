@@ -23,7 +23,7 @@ import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.Listen
 import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.UnListen
 import java.sql.Connection
 import java.sql.SQLException
-import java.util.*
+import java.util.UUID
 import kotlin.concurrent.thread
 
 /**
@@ -31,7 +31,7 @@ import kotlin.concurrent.thread
  *
  * @property postgreSQLDbUrl The PostgreSQL database URL.
  * @property dbConnectionPoolSize The maximum size that the JDBC connection pool is allowed to reach.
- * @property identifier Identifier of instance/node used in logging mode.
+ * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
 class BrokerPostgreSQL(
@@ -89,7 +89,7 @@ class BrokerPostgreSQL(
 
         getLastEvent(topic)?.let { event -> handler(event) }
 
-        logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
+        logger.info("[{}] new subscriber topic '{}' id '{}'", identifier, topic, subscriber.id)
         notifyCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
 
         return { unsubscribe(topic, subscriber) }
@@ -118,7 +118,7 @@ class BrokerPostgreSQL(
      */
     private fun unsubscribe(topic: String, subscriber: Subscriber) {
         associatedSubscribers.removeIf(topic, { sub -> sub.id == subscriber.id })
-        logger.info("unsubscribe topic '{}' id '{}'", topic, subscriber.id)
+        logger.info("[{}] unsubscribe topic '{}' id '{}'", identifier, topic, subscriber.id)
         notifyCs4kSystem("unsubscribe topic '$topic' id '${subscriber.id}'")
     }
 
@@ -141,7 +141,8 @@ class BrokerPostgreSQL(
                         newNotifications.forEach { notification ->
                             if (notification.name == channel) {
                                 logger.info(
-                                    "new event '{}' backendPid '{}'",
+                                    "[{}] new event '{}' backendPid '{}'",
+                                    identifier,
                                     notification.parameter,
                                     pgConnection.backendPID
                                 )
@@ -193,7 +194,7 @@ class BrokerPostgreSQL(
                     stm.execute("$this $channel;")
                 }
             }
-            logger.info("$this channel '{}'", channel)
+            logger.info("[{}] $this channel '{}'", identifier, channel)
         }, retryCondition)
     }
 
@@ -230,7 +231,7 @@ class BrokerPostgreSQL(
                     conn.commit()
                     conn.autoCommit = true
 
-                    logger.info("notify topic '{}' event '{}'", topic, eventJson)
+                    logger.info("[{}] notify topic '{}' event '{}'", identifier, topic, eventJson)
                 } catch (e: SQLException) {
                     conn.rollback()
                     throw e
@@ -319,14 +320,14 @@ class BrokerPostgreSQL(
                             """.trimIndent()
                         )
                     } catch (e: SQLException) {
-                        logger.info("error with sqlstate -> {}", e.sqlState)
+                        logger.info("[{}] error with sqlstate {}", identifier, e.sqlState)
                         if (e.sqlState != UNIQUE_VIOLATION_SQLSTATE) {
                             throw e
                         } else {
                             // Here the unique violation exception is ignored.
                             // This is done because of a check-then-act done in the SQL command, but there's no
                             // harm done to the app or the database.
-                            logger.info("schema and tables already created, ignoring...")
+                            logger.info("[{}] schema and tables already created, ignoring ...", identifier)
                         }
                     }
                 }
@@ -335,7 +336,7 @@ class BrokerPostgreSQL(
     }
 
     /**
-     * Notify the topic [SYSTEM_TOPIC] with the message.
+     * Notify the topic [SYSTEM_TOPIC] with the message, if logging mode is active.
      *
      * @param message The message to send.
      */
@@ -356,6 +357,7 @@ class BrokerPostgreSQL(
         // Block until new notifications arrive, using the value '0'.
         private const val BLOCK_UNTIL_NEW_NOTIFICATIONS = 0
 
+        // SQL state of unique violation.
         private const val UNIQUE_VIOLATION_SQLSTATE = "23505"
 
         /**
