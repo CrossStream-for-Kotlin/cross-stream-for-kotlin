@@ -67,11 +67,6 @@ class ConsumedTopics {
      */
     fun getAllLatestEventInfos(): List<ConsumeInfo> = lock.withLock {
         val info = consumeInfoMap.values
-        val maximumOffset = info.maxOfOrNull { it.offset }
-        offsetRequestList.forEach {
-            it.offset = maximumOffset
-            it.continuation.resumeWith(Result.success(Unit))
-        }
         return info.toList().sortedBy { it.offset }
     }
 
@@ -86,6 +81,13 @@ class ConsumedTopics {
                     offset = eventEntry.offset,
                     lastEvent = eventEntry.lastEvent
                 )
+            val info = consumeInfoMap.values
+            val maximumOffset = info.maxOfOrNull { it.offset }
+            offsetRequestList.forEach {
+                it.offset = maximumOffset
+                it.continuation.resumeWith(Result.success(Unit))
+            }
+            offsetRequestList.clear()
         }
     }
 
@@ -143,6 +145,14 @@ class ConsumedTopics {
                 result
             }
         }
+    }
+
+    /**
+     * Reading the latest offset stored without waiting.
+     * @return The latest offset, if able to be obtained.
+     */
+    fun getMaximumOffsetNoWait(): Long? = lock.withLock {
+        consumeInfoMap.values.maxOfOrNull { value -> value.offset }
     }
 
     /**

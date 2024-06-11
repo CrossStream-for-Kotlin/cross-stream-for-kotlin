@@ -134,7 +134,10 @@ class BrokerRabbit(
             requireNotNull(body)
             val message = Message.deserialize(String(body))
             val offset = properties.headers["x-stream-offset"].toString().toLong()
-            processMessage(message, offset)
+            val maxOffset = consumedTopics.getMaximumOffsetNoWait()
+            if (maxOffset == null || offset > maxOffset) {
+                processMessage(message, offset)
+            }
             retryExecutor.execute({ BrokerLostConnectionException() }, {
                 channel.queueBind(brokerId, historyExchange, "")
                 channel.basicAck(envelope.deliveryTag, false)
@@ -348,13 +351,13 @@ class BrokerRabbit(
             publishingChannelPool.stopUsingChannel(channel)
         }, retryCondition)
         logger.info("publish topic '{}' event message '{}'", topic, message)
-        if (topic != Broker.SYSTEM_TOPIC) publishCs4kSystem("notify topic $topic event message $message")
+        if (topic != SYSTEM_TOPIC) publishCs4kSystem("notify topic $topic event message $message")
     }
 
     private fun publishCs4kSystem(message: String) {
         if (enableLogging) {
             publishToStream(
-                Broker.SYSTEM_TOPIC,
+                SYSTEM_TOPIC,
                 "[$identifier] $message",
                 false
             )

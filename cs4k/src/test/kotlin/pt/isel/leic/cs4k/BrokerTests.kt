@@ -31,7 +31,9 @@ class BrokerTests {
     fun `testing each broker instance`() {
         brokerConstructors.forEach { constructor ->
             val brokerInstances = List(NUMBER_OF_BROKER_INSTANCES) { constructor() }
+
             `simple tests`(brokerInstances)
+            `new brokers join tests`(brokerInstances) { constructor() }
             `stress tests`(brokerInstances)
             `shutdown tests` { constructor() }
 
@@ -51,6 +53,11 @@ class BrokerTests {
         `n subscribers in n topics receiving n messages with several broker instances involved`(brokerInstances)
         `subscriber unsubscribing should not receive message`(brokerInstances)
         `subscribers unsubscribing should not receive message with several broker instances involved`(brokerInstances)
+    }
+
+    private fun `new brokers join tests`(brokerInstances: List<Broker>, constructor: () -> Broker) {
+        `should receive last published event on existing topic when new broker join`(brokerInstances, constructor)
+        `n broker instances should successfully subscribe and receive past events from topics`(brokerInstances, constructor)
     }
 
     private fun `stress tests`(brokerInstances: List<Broker>) {
@@ -629,6 +636,85 @@ class BrokerTests {
 
         // Clean Up
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
+    }
+
+    // ---- new brokers join tests ----
+
+    private fun `should receive last published event on existing topic when new broker join`(
+        brokerInstances: List<Broker>,
+        createBrokerInstance: () -> Broker
+    ) {
+        // Arrange
+        val topic = newRandomTopic()
+        val message = newRandomMessage()
+
+        val latch = CountDownLatch(1)
+        getRandomBrokerInstance(brokerInstances).publish(topic, message)
+
+        // Act
+        val newBroker = createBrokerInstance()
+
+        Thread.sleep(3000)
+
+        val unsubscribe = newBroker.subscribe(topic) { event ->
+            // Assert [1]
+            assertEquals(topic, event.topic)
+            assertEquals(FIRST_EVENT_ID, event.id)
+            assertEquals(message, event.message)
+            assertFalse(event.isLast)
+            latch.countDown()
+        }
+
+        // Assert [2]
+        val reachedZero = latch.await(60000, TimeUnit.MILLISECONDS)
+        assertTrue(reachedZero)
+
+        // Clean Up
+        unsubscribe()
+        newBroker.shutdown()
+    }
+
+    private fun `n broker instances should successfully subscribe and receive past events from topics`(
+        brokerInstances: List<Broker>,
+        createBrokerInstance: () -> Broker
+    ) {
+        // Arrange
+        val topicsAndMessage = (1..NUMBER_OF_TOPICS).associate {
+            newRandomTopic() to newRandomMessage()
+        }
+        topicsAndMessage.forEach {
+            getRandomBrokerInstance(brokerInstances).publish(it.key, it.value)
+        }
+
+        val latch = CountDownLatch(topicsAndMessage.size)
+        val receivedMessages = ConcurrentLinkedQueue<String>()
+        val newBrokers = mutableListOf<Broker>()
+        val unsubscribes = mutableListOf<() -> Unit>()
+
+        // Act
+        topicsAndMessage.forEach { entry ->
+            val newBroker = createBrokerInstance()
+            val un = newBroker.subscribe(entry.key) { event ->
+                receivedMessages.add(event.message)
+                latch.countDown()
+            }
+            unsubscribes.add(un)
+            newBrokers.add(newBroker)
+        }
+
+        // Assert
+        val reachedZero = latch.await(60000, TimeUnit.MILLISECONDS)
+        assertTrue(reachedZero)
+
+        assertEquals(receivedMessages.size, topicsAndMessage.size)
+        val messagesSend = topicsAndMessage.values.toList()
+        receivedMessages.toSet().toList().forEach {
+            assertTrue(messagesSend.contains(it))
+        }
+
+        // Clean Up
+        unsubscribes.forEach { it() }
+        newBrokers.forEach { it.shutdown() }
     }
 
     // ---- stress tests ----
