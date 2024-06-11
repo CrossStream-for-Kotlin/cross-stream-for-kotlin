@@ -127,22 +127,6 @@ class ChannelPool(
     }
 
     /**
-     * Marks the channel as being used for consumption of a queue or stream.
-     * @param channel Channel obtained from channel pool.
-     * @param consumerTag Newly created consumerTag created on basicConsume.
-     */
-    fun registerConsuming(channel: Channel, consumerTag: String) {
-        if (isClosed) throw IOException("Pool already closed - cannot obtain new channels")
-        lock.withLock {
-            val channelInfo = channels.find {
-                it.channel.connection.id == channel.connection.id && it.channel.channelNumber == channel.channelNumber
-            }
-            requireNotNull(channelInfo) { "Channel provided must have been created by the pool" }
-            channelInfo.consumerTag = consumerTag
-        }
-    }
-
-    /**
      * Makes the channel free for the taking.
      * @param channel The channel that the user doesn't want to use.
      */
@@ -160,14 +144,6 @@ class ChannelPool(
                 entry.channel = connection.createChannel()
                 entry.continuation.resumeWith(Result.success(Unit))
             }
-        }
-    }
-
-    fun isConnectionClosed() = lock.withLock {
-        if (isClosed) {
-            return@withLock true
-        } else {
-            return !connection.isOpen
         }
     }
 

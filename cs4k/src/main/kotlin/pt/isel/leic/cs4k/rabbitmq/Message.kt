@@ -6,7 +6,7 @@ import com.fasterxml.jackson.module.kotlin.KotlinModule
 data class Message(
     val topic: String,
     val message: String,
-    val isLast: Boolean
+    val isLast: Boolean = false
 ) {
     companion object {
         private val objectMapper = ObjectMapper().registerModules(KotlinModule.Builder().build())
