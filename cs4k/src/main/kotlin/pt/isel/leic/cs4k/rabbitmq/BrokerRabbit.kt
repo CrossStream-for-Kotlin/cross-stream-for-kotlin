@@ -380,7 +380,7 @@ class BrokerRabbit(
 
         // Default value for subscription delay, used as a timeout waiting for receiving history from another
         // broker.
-        private const val DEFAULT_SUBSCRIBE_DELAY_MILLIS = 250L
+        private const val DEFAULT_SUBSCRIBE_DELAY_MILLIS = 1000L
 
         // Default value for the common stream size, in bytes.
         private const val DEFAULT_STREAM_SIZE = 8_000_000
