@@ -155,7 +155,6 @@ class BrokerRedis(
 
     override fun shutdown() {
         if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
-
         isShutdown = true
         subConnection.removeListener(singletonRedisPubSubAdapter)
         subConnection.close()
