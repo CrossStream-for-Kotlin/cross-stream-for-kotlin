@@ -54,10 +54,6 @@ import kotlin.time.Duration
  *
  * @property hostname The hostname.
  * @property serviceDiscoveryConfig Service Discovery configuration.
- *
- * TODO("Save the latest events for each topic and make them available to new subscribers")
- * TODO("Fix neighbors scale down errors")
- * TODO("Fix lost event sending logic")
  */
 class BrokerIndependent(
     private val hostname: String,

@@ -31,7 +31,7 @@ class MulticastServiceDiscovery(
     private val multicastInetAddress = InetAddress.getByName(MULTICAST_IP)
 
     // Multicast socket address.
-    private val multicastInetSocketAddress = InetSocketAddress(multicastInetAddress, MULTICAST_PORT)
+    private val multicastInetSocketAddress = InetSocketAddress(multicastInetAddress, MULTICAST_RECEIVE_PORT)
 
     // Buffer that stores the content of received multicast datagram packets.
     private val inboundBuffer = ByteArray(INBOUND_BUFFER_SIZE)
@@ -42,7 +42,7 @@ class MulticastServiceDiscovery(
     // Thread to listen for multicast datagram packet.
     private val listenMulticastSocketThread = Thread {
         retryExecutor.execute({ BrokerException.UnexpectedBrokerException() }, {
-            val multicastSocket = MulticastSocket(MULTICAST_PORT)
+            val multicastSocket = MulticastSocket(MULTICAST_RECEIVE_PORT)
             val networkInterface = getActiveMulticastNetworkInterface()
             joinMulticastGroup(multicastSocket, networkInterface)
             listenMulticastSocket(multicastSocket, networkInterface)
@@ -52,7 +52,7 @@ class MulticastServiceDiscovery(
     // Thread to periodic announce existence to neighbors.
     private val periodicAnnounceExistenceToNeighborsThread = Thread {
         retryExecutor.execute({ BrokerException.UnexpectedBrokerException() }, {
-            val multicastSocket = MulticastSocket(MULTICAST_PORT)
+            val multicastSocket = MulticastSocket(MULTICAST_SEND_PORT)
             periodicAnnounceExistenceToNeighbors(multicastSocket)
         })
     }
@@ -159,7 +159,8 @@ class MulticastServiceDiscovery(
 
         private const val MESSAGE = "HELLO"
         private const val MULTICAST_IP = "228.5.6.7"
-        private const val MULTICAST_PORT = 6789
+        private const val MULTICAST_RECEIVE_PORT = 6789
+        private const val MULTICAST_SEND_PORT = 6790
         private const val INBOUND_BUFFER_SIZE = 1024
         private const val TIME_TO_LIVE = 10
         private const val DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME = 60_000L

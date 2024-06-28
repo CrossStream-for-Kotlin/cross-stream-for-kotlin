@@ -11,11 +11,11 @@ import java.net.InetAddress
 
 /**
  * Responsible for service discovery through Domain Name System (DNS) queries, i.e.:
- *  - Periodic querying the DNS server, giving it a name (that being a Docker service name).
+ *  - Periodic querying the DNS server, giving it a name.
  *  - Adding new entries to the neighbors.
  *
  * @property hostname The hostname.
- * @property serviceName The Docker service name.
+ * @property serviceName The service name.
  * @property neighbors The set of neighbors.
  * @property lookupAgainTime Amount of time, in milliseconds before another DNS query.
  */

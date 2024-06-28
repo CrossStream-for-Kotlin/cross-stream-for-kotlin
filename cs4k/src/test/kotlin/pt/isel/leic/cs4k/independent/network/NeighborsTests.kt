@@ -1,4 +1,4 @@
-package pt.isel.leic.cs4k.independent
+package pt.isel.leic.cs4k.independent.network
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -11,9 +11,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
-import pt.isel.leic.cs4k.independent.network.InboundConnection
-import pt.isel.leic.cs4k.independent.network.Neighbor
-import pt.isel.leic.cs4k.independent.network.Neighbors
 import java.net.InetAddress
 
 class NeighborsTests {

@@ -1,11 +1,10 @@
-package pt.isel.leic.cs4k.independent
+package pt.isel.leic.cs4k.independent.messaging
 
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
-import pt.isel.leic.cs4k.independent.messaging.MessageQueue
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.assertEquals
