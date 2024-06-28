@@ -84,11 +84,13 @@ class BrokerIndependent(
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
+    private val brokerThread: Thread
+
     // Scope for launch coroutines.
     private lateinit var scope: CoroutineScope
 
     init {
-        thread {
+        brokerThread = thread {
             runBlocking {
                 supervisorScope {
                     scope = this
@@ -350,10 +352,11 @@ class BrokerIndependent(
 
     override fun shutdown() {
         if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
-
         isShutdown = true
         scope.cancel()
         closeCoroutineDispatchers()
+        brokerThread.interrupt()
+        brokerThread.join()
     }
 
     /**

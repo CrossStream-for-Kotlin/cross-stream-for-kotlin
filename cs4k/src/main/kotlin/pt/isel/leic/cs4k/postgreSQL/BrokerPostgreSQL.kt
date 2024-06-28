@@ -72,12 +72,14 @@ class BrokerPostgreSQL(
         !(throwable is SQLException && connectionPool.isClosed)
     }
 
+    private val listeningThread: Thread
+
     init {
         // Create the events table if it does not exist.
         createEventsTable()
 
         // Start a new thread to ...
-        thread {
+        listeningThread = thread {
             // ... listen for notifications and ...
             listen()
             // ... wait for notifications.
@@ -124,6 +126,8 @@ class BrokerPostgreSQL(
         isShutdown = true
         unListen()
         connectionPool.close()
+        listeningThread.interrupt()
+        listeningThread.join()
     }
 
     /**
