@@ -32,7 +32,9 @@ class RetryExecutor(
             try {
                 return action()
             } catch (e: Exception) {
-                if (!isToRetry(retryCondition, e)) throw e
+                if (!isToRetry(retryCondition, e)) {
+                    throw e
+                }
             }
         }
         throw exception()
@@ -57,7 +59,9 @@ class RetryExecutor(
             try {
                 return action()
             } catch (e: Exception) {
-                if (!isToRetry(retryCondition, e)) throw e
+                if (!isToRetry(retryCondition, e)) {
+                    throw e
+                }
             }
         }
         throw exception()

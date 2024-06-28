@@ -26,6 +26,32 @@ class AssociatedSubscribers {
     }
 
     /**
+     * Get all subscribers associated with a topic that has not received the event yet.
+     * Furthermore, update the last event identifier received by the subscribers.
+     *
+     * @param topic The topic to get the subscribers from.
+     * @param eventId The new last event identifier.
+     * @return The list of subscribers associated with the topic that has not received the event yet.
+     */
+    fun getAndUpdateAll(topic: String, eventId: Long): List<BaseSubscriber> {
+        lock.withLock {
+            val list = map[topic] ?: return emptyList()
+            val listToReturn = list.filter { sub ->
+                (sub as SubscriberWithEventTracking).lastEventIdReceived != eventId
+            }
+
+            map[topic] = list.map { subscriber ->
+                if (subscriber is SubscriberWithEventTracking && subscriber.lastEventIdReceived != eventId) {
+                    subscriber.copy(lastEventIdReceived = eventId)
+                } else {
+                    subscriber
+                }
+            }
+            return listToReturn
+        }
+    }
+
+    /**
      * Check if there are no subscribers for a given topic.
      *
      * @param topic The topic to check.
@@ -54,7 +80,9 @@ class AssociatedSubscribers {
                 }
             }
         }
-        if (onTopicAdd != null && newTopic) onTopicAdd()
+        if (onTopicAdd != null && newTopic) {
+            onTopicAdd()
+        }
     }
 
     /**
@@ -75,6 +103,26 @@ class AssociatedSubscribers {
                 }
             }
         }
-        if (onTopicRemove != null && topicGone) onTopicRemove()
+        if (onTopicRemove != null && topicGone) {
+            onTopicRemove()
+        }
+    }
+
+    /**
+     * Update the last event identifier received by the subscriber.
+     *
+     * @param topic The topic to which the subscriber is subscribed.
+     * @param subscriber The subscriber.
+     * @param eventId The new last event identifier.
+     */
+    fun updateLastEventIdReceived(topic: String, subscriber: BaseSubscriber, eventId: Long) {
+        lock.withLock {
+            val subscribers = map[topic] ?: return
+            val subscriberToUpdate = subscribers.find { sub -> sub == subscriber } ?: return
+            val updatedSubscriber = (subscriberToUpdate as SubscriberWithEventTracking).copy(
+                lastEventIdReceived = eventId
+            )
+            map[topic] = subscribers - subscriberToUpdate + updatedSubscriber
+        }
     }
 }

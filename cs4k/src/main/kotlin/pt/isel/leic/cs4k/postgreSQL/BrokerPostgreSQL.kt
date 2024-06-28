@@ -9,6 +9,7 @@ import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
 import pt.isel.leic.cs4k.Broker.Companion.UNKNOWN_IDENTIFIER
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
+import pt.isel.leic.cs4k.common.BaseSubscriber
 import pt.isel.leic.cs4k.common.BrokerException.BrokerConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
@@ -18,6 +19,7 @@ import pt.isel.leic.cs4k.common.BrokerSerializer
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
+import pt.isel.leic.cs4k.common.SubscriberWithEventTracking
 import pt.isel.leic.cs4k.common.Utils
 import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.Listen
 import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.UnListen
@@ -30,12 +32,14 @@ import kotlin.concurrent.thread
  * Broker PostgreSQL.
  *
  * @property postgreSQLDbUrl The PostgreSQL database URL.
+ * @property preventConsecutiveDuplicateEvents Prevent consecutive duplicate events.
  * @property dbConnectionPoolSize The maximum size that the JDBC connection pool is allowed to reach.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
 class BrokerPostgreSQL(
     private val postgreSQLDbUrl: String,
+    private val preventConsecutiveDuplicateEvents: Boolean = false,
     private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false
@@ -82,28 +86,40 @@ class BrokerPostgreSQL(
     }
 
     override fun subscribe(topic: String, handler: (event: Event) -> Unit): () -> Unit {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        }
 
-        val subscriber = Subscriber(UUID.randomUUID(), handler)
+        val subscriber = createSubscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
 
-        getLastEvent(topic)?.let { event -> handler(event) }
+        getLastEvent(topic)?.let { event ->
+            if (preventConsecutiveDuplicateEvents) {
+                associatedSubscribers.updateLastEventIdReceived(topic, subscriber, event.id)
+            }
+            handler(event)
+        }
 
-        logger.info("[{}] new subscriber topic '{}' id '{}'", identifier, topic, subscriber.id)
-        notifyCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
+        logAndNotifySystemTopic("new subscriber topic '$topic' id '${subscriber.id}'")
 
         return { unsubscribe(topic, subscriber) }
     }
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
-        if (topic == SYSTEM_TOPIC) throw UnauthorizedTopicException()
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
+        }
+        if (topic == SYSTEM_TOPIC) {
+            throw UnauthorizedTopicException()
+        }
 
         notify(topic, message, isLastMessage)
     }
 
     override fun shutdown() {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
+        }
 
         isShutdown = true
         unListen()
@@ -111,15 +127,28 @@ class BrokerPostgreSQL(
     }
 
     /**
+     * Create a subscriber.
+     *
+     * @param id The identifier of a subscriber.
+     * @param handler The handler to be called when there is a new event.
+     * @return The subscriber created.
+     */
+    private fun createSubscriber(id: UUID, handler: (event: Event) -> Unit) =
+        if (preventConsecutiveDuplicateEvents) {
+            SubscriberWithEventTracking(id, handler)
+        } else {
+            Subscriber(id, handler)
+        }
+
+    /**
      * Unsubscribe from a topic.
      *
      * @param topic The topic name.
      * @param subscriber The subscriber who unsubscribed.
      */
-    private fun unsubscribe(topic: String, subscriber: Subscriber) {
+    private fun unsubscribe(topic: String, subscriber: BaseSubscriber) {
         associatedSubscribers.removeIf(topic, { sub -> sub.id == subscriber.id })
-        logger.info("[{}] unsubscribe topic '{}' id '{}'", identifier, topic, subscriber.id)
-        notifyCs4kSystem("unsubscribe topic '$topic' id '${subscriber.id}'")
+        logAndNotifySystemTopic("unsubscribe topic '$topic' id '${subscriber.id}'")
     }
 
     /**
@@ -154,8 +183,11 @@ class BrokerPostgreSQL(
                 }
             }, retryCondition)
         } catch (ex: PSQLException) {
-            if (!retryCondition(ex)) return
-            throw ex
+            if (!retryCondition(ex)) {
+                return
+            } else {
+                throw ex
+            }
         }
     }
 
@@ -163,9 +195,12 @@ class BrokerPostgreSQL(
      * Deliver event to subscribers, i.e., call all subscriber handlers of the event topic.
      */
     private fun deliverToSubscribers(event: Event) {
-        associatedSubscribers
-            .getAll(event.topic)
-            .forEach { subscriber -> subscriber.handler(event) }
+        val associatedSubscribers = if (preventConsecutiveDuplicateEvents) {
+            associatedSubscribers.getAndUpdateAll(event.topic, event.id)
+        } else {
+            associatedSubscribers.getAll(event.topic)
+        }
+        associatedSubscribers.forEach { subscriber -> subscriber.handler(event) }
     }
 
     /**
@@ -207,7 +242,7 @@ class BrokerPostgreSQL(
      * @throws BrokerLostConnectionException If the broker lost connection to the database.
      * @throws UnexpectedBrokerException If something unexpected happens.
      */
-    private fun notify(topic: String, message: String, isLastMessage: Boolean) {
+    private fun notify(topic: String, message: String, isLastMessage: Boolean = false) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             connectionPool.connection.use { conn ->
                 try {
@@ -230,15 +265,15 @@ class BrokerPostgreSQL(
 
                     conn.commit()
                     conn.autoCommit = true
-
-                    logger.info("[{}] notify topic '{}' event '{}'", identifier, topic, eventJson)
                 } catch (e: SQLException) {
                     conn.rollback()
                     throw e
                 }
             }
         }, retryCondition)
-        if (topic != SYSTEM_TOPIC) notifyCs4kSystem("notify topic '$topic' event message '$message'")
+        if (topic != SYSTEM_TOPIC) {
+            logAndNotifySystemTopic("notify topic '$topic' event message '$message'")
+        }
     }
 
     /**
@@ -267,7 +302,11 @@ class BrokerPostgreSQL(
             stm.setString(2, message)
             stm.setBoolean(3, isLast)
             val rs = stm.executeQuery()
-            return if (rs.next()) rs.getLong("id") else throw UnexpectedBrokerException()
+            return if (rs.next()) {
+                rs.getLong("id")
+            } else {
+                throw UnexpectedBrokerException()
+            }
         }
     }
 
@@ -336,17 +375,15 @@ class BrokerPostgreSQL(
     }
 
     /**
-     * Notify the topic [SYSTEM_TOPIC] with the message, if logging mode is active.
+     * Log the message and notify, if logging mode is active, the topic [SYSTEM_TOPIC] with the message.
      *
      * @param message The message to send.
      */
-    private fun notifyCs4kSystem(message: String) {
+    private fun logAndNotifySystemTopic(message: String) {
+        val logMessage = "[$identifier] $message"
+        logger.info(logMessage)
         if (enableLogging) {
-            notify(
-                topic = SYSTEM_TOPIC,
-                message = "[$identifier] $message",
-                isLastMessage = false
-            )
+            notify(SYSTEM_TOPIC, logMessage)
         }
     }
 
