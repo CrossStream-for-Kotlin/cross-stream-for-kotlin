@@ -108,9 +108,9 @@ class BrokerPostgreSQL(
         if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
         isShutdown = true
         unListen()
+        connectionPool.close()
         listeningThread.interrupt()
         listeningThread.join()
-        connectionPool.close()
     }
 
     /**
