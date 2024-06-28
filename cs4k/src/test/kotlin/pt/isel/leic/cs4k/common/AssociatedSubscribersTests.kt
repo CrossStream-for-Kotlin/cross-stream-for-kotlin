@@ -12,6 +12,8 @@ import kotlin.test.assertTrue
 
 class AssociatedSubscribersTests {
 
+    // --- Subscriber ---
+
     @Test
     fun `insert a subscribe`() {
         // Arrange
@@ -308,6 +310,37 @@ class AssociatedSubscribersTests {
 
         // Assert [2]
         assertTrue(topicGone)
+    }
+
+    // --- SubscriberWithEventTracking ---
+
+    @Test
+    fun `update the last event id listened by a subscriber stored`() {
+        // Arrange
+        val initialLastEventID = 5L
+        val updatedLastEventID = 6L
+
+        val associatedSubscribers = AssociatedSubscribers()
+        val topic = newTopic()
+        val subscriber = SubscriberWithEventTracking(UUID.randomUUID(), { _ -> }, initialLastEventID)
+
+        // Act [1]
+        associatedSubscribers.addToKey(topic, subscriber)
+
+        // Assert [1]
+        assertEquals(
+            initialLastEventID,
+            (associatedSubscribers.getAll(topic).first() as SubscriberWithEventTracking).lastEventIdReceived
+        )
+
+        // Act [2]
+        associatedSubscribers.updateLastEventIdReceived(topic, subscriber, updatedLastEventID)
+
+        // Assert [2]
+        assertEquals(
+            updatedLastEventID,
+            (associatedSubscribers.getAll(topic).first() as SubscriberWithEventTracking).lastEventIdReceived
+        )
     }
 
     private companion object {

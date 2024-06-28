@@ -1253,7 +1253,9 @@ class BrokerTests {
 
         private val brokerConstructors: List<() -> Broker> = listOf(
             { BrokerPostgreSQL(Environment.getPostgreSqlDbUrl()) },
+            { BrokerPostgreSQL(Environment.getPostgreSqlDbUrl(), preventConsecutiveDuplicateEvents = true) },
             { BrokerRedis(RedisNode(Environment.getRedisHost(), Environment.getRedisPort())) },
+            { BrokerRedis(RedisNode(Environment.getRedisHost(), Environment.getRedisPort()), preventConsecutiveDuplicateEvents = true) },
             { BrokerRabbit(RabbitNode(Environment.getRabbitHost(), Environment.getRabbitPort())) }
         )
 
