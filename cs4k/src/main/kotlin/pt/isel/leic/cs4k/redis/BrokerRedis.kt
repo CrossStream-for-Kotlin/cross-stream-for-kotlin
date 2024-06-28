@@ -18,6 +18,7 @@ import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
 import pt.isel.leic.cs4k.Broker.Companion.UNKNOWN_IDENTIFIER
 import pt.isel.leic.cs4k.common.AssociatedSubscribers
+import pt.isel.leic.cs4k.common.BaseSubscriber
 import pt.isel.leic.cs4k.common.BrokerException.BrokerConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
@@ -28,6 +29,7 @@ import pt.isel.leic.cs4k.common.BrokerSerializer
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
+import pt.isel.leic.cs4k.common.SubscriberWithEventTracking
 import pt.isel.leic.cs4k.common.Utils
 import java.util.UUID
 
@@ -35,12 +37,14 @@ import java.util.UUID
  * Broker Redis - Cluster.
  *
  * @property redisNodes The list of Redis nodes.
+ * @property preventConsecutiveDuplicateEvents Prevent consecutive duplicate events.
  * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
 class BrokerRedis(
     private val redisNodes: List<RedisNode>,
+    private val preventConsecutiveDuplicateEvents: Boolean = false,
     private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false
@@ -50,24 +54,28 @@ class BrokerRedis(
      * Broker Redis - Single Node.
      *
      * @property redisNode The Redis node.
+     * @property preventConsecutiveDuplicateEvents Prevent consecutive duplicate events.
      * @property dbConnectionPoolSize The maximum size that the connection pool is allowed to reach.
      * @property identifier Identifier of instance/node used in logs.
      * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
      */
     constructor(
         redisNode: RedisNode,
+        preventConsecutiveDuplicateEvents: Boolean = false,
         dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
         identifier: String = UNKNOWN_IDENTIFIER,
         enableLogging: Boolean = false
     ) :
-        this(listOf(redisNode), dbConnectionPoolSize, identifier, enableLogging)
+        this(listOf(redisNode), preventConsecutiveDuplicateEvents, dbConnectionPoolSize, identifier, enableLogging)
 
     init {
         // Check database connection pool size.
         Utils.checkDbConnectionPoolSize(dbConnectionPoolSize)
 
         // Check node list.
-        if (redisNodes.isEmpty()) throw NodeListIsEmptyException()
+        if (redisNodes.isEmpty()) {
+            throw NodeListIsEmptyException()
+        }
     }
 
     // Check if it is cluster.
@@ -88,7 +96,11 @@ class BrokerRedis(
 
     // Redis client.
     private val redisClient = retryExecutor.execute({ BrokerConnectionException() }, {
-        if (isCluster) createRedisClusterClient(redisNodes) else createRedisClient(redisNodes.first())
+        if (isCluster) {
+            createRedisClusterClient(redisNodes)
+        } else {
+            createRedisClient(redisNodes.first())
+        }
     })
 
     // Connection to asynchronous subscribe and unsubscribe.
@@ -114,14 +126,12 @@ class BrokerRedis(
     private val singletonRedisPubSubAdapter = object : RedisPubSubAdapter<String, String>() {
 
         override fun message(channel: String?, message: String?) {
-            if (channel == null || message == null) throw UnexpectedBrokerException()
+            if (channel == null || message == null) {
+                throw UnexpectedBrokerException()
+            }
             logger.info("[{}] new event '{}' channel '{}'", identifier, message, channel)
 
-            val subscribers = associatedSubscribers.getAll(channel.substringAfter(prefix))
-            if (subscribers.isNotEmpty()) {
-                val event = BrokerSerializer.deserializeEventFromJson(message)
-                subscribers.forEach { subscriber -> subscriber.handler(event) }
-            }
+            processMessage(channel.substringAfter(prefix), message)
         }
     }
 
@@ -131,30 +141,40 @@ class BrokerRedis(
     }
 
     override fun subscribe(topic: String, handler: (event: Event) -> Unit): () -> Unit {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
-
-        val subscriber = Subscriber(UUID.randomUUID(), handler)
-        associatedSubscribers.addToKey(topic, subscriber) {
-            subscribeTopic(topic)
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
         }
 
-        getLastEvent(topic)?.let { event -> handler(event) }
+        val subscriber = createSubscriber(UUID.randomUUID(), handler)
+        associatedSubscribers.addToKey(topic, subscriber) { subscribeTopic(topic) }
 
-        logger.info("[{}] new subscriber topic '{}' id '{}'", identifier, topic, subscriber.id)
-        publishMessageToCs4kSystem("new subscriber topic '$topic' id '${subscriber.id}'")
+        getLastEvent(topic)?.let { event ->
+            if (preventConsecutiveDuplicateEvents) {
+                associatedSubscribers.updateLastEventIdReceived(topic, subscriber, event.id)
+            }
+            handler(event)
+        }
+
+        logAndPublishMessageToSystemTopic("new subscriber topic '$topic' id '${subscriber.id}'")
 
         return { unsubscribe(topic, subscriber) }
     }
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
-        if (topic == SYSTEM_TOPIC) throw UnauthorizedTopicException()
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
+        }
+        if (topic == SYSTEM_TOPIC) {
+            throw UnauthorizedTopicException()
+        }
 
         publishMessage(topic, message, isLastMessage)
     }
 
     override fun shutdown() {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
+        }
 
         isShutdown = true
         subConnection.removeListener(singletonRedisPubSubAdapter)
@@ -165,20 +185,64 @@ class BrokerRedis(
     }
 
     /**
+     * Process the message received from Redis.
+     *
+     * @param topic The topic.
+     * @param message The message.
+     */
+    private fun processMessage(topic: String, message: String) {
+        if (preventConsecutiveDuplicateEvents) {
+            val event = BrokerSerializer.deserializeEventFromJson(message)
+            val associatedSubscribers = associatedSubscribers.getAndUpdateAll(topic, event.id)
+            if (associatedSubscribers.isNotEmpty()) {
+                deliverToSubscribers(associatedSubscribers, event)
+            }
+        } else {
+            val associatedSubscribers = associatedSubscribers.getAll(topic)
+            if (associatedSubscribers.isNotEmpty()) {
+                deliverToSubscribers(associatedSubscribers, BrokerSerializer.deserializeEventFromJson(message))
+            }
+        }
+    }
+
+    /**
+     * Deliver event to subscribers, i.e., call all subscriber handlers of the event topic.
+     *
+     * @param subscribers The list of subscribers to call the handler.
+     * @param event The event.
+     */
+    private fun deliverToSubscribers(subscribers: List<BaseSubscriber>, event: Event) {
+        subscribers.forEach { subscriber -> subscriber.handler(event) }
+    }
+
+    /**
+     * Create a subscriber.
+     *
+     * @param id The identifier of a subscriber.
+     * @param handler The handler to be called when there is a new event.
+     * @return The created subscriber created.
+     */
+    private fun createSubscriber(id: UUID, handler: (event: Event) -> Unit) =
+        if (preventConsecutiveDuplicateEvents) {
+            SubscriberWithEventTracking(id, handler)
+        } else {
+            Subscriber(id, handler)
+        }
+
+    /**
      * Unsubscribe from a topic.
      *
      * @param topic The topic name.
      * @param subscriber The subscriber who unsubscribed.
      * @throws BrokerLostConnectionException If the broker lost connection to the database.
      */
-    private fun unsubscribe(topic: String, subscriber: Subscriber) {
+    private fun unsubscribe(topic: String, subscriber: BaseSubscriber) {
         associatedSubscribers.removeIf(
             topic = topic,
             predicate = { sub -> sub.id == subscriber.id },
             onTopicRemove = { unsubscribeTopic(topic) }
         )
-        logger.info("[{}] unsubscribe topic '{}' id '{}'", identifier, topic, subscriber.id)
-        publishMessageToCs4kSystem("unsubscribe topic '$topic' id '${subscriber.id}'")
+        logAndPublishMessageToSystemTopic("unsubscribe topic '$topic' id '${subscriber.id}'")
     }
 
     /**
@@ -216,7 +280,7 @@ class BrokerRedis(
      * @throws BrokerLostConnectionException If the broker lost connection to the database.
      * @throws UnexpectedBrokerException If an invalid state exists.
      */
-    private fun publishMessage(topic: String, message: String, isLastMessage: Boolean) {
+    private fun publishMessage(topic: String, message: String, isLastMessage: Boolean = false) {
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             val eventJson = BrokerSerializer.serializeEventToJson(
                 Event(
@@ -227,9 +291,10 @@ class BrokerRedis(
                 )
             )
             pubConnection.async().publish(prefix + topic, eventJson)
-            logger.info("[{}] publish topic '{}' event '{}'", identifier, topic, eventJson)
         }, retryCondition)
-        if (topic != SYSTEM_TOPIC) publishMessageToCs4kSystem("publish topic '$topic' event message '$message'")
+        if (topic != SYSTEM_TOPIC) {
+            logAndPublishMessageToSystemTopic("publish topic '$topic' event message '$message'")
+        }
     }
 
     /**
@@ -295,17 +360,15 @@ class BrokerRedis(
         }
 
     /**
-     * Publish topic [SYSTEM_TOPIC] with the message, if logging mode is active.
+     * Log the message and publish, if logging mode is active, the topic [SYSTEM_TOPIC] with the message.
      *
      * @param message The message to send.
      */
-    private fun publishMessageToCs4kSystem(message: String) {
+    private fun logAndPublishMessageToSystemTopic(message: String) {
+        val logMessage = "[$identifier] $message"
+        logger.info(logMessage)
         if (enableLogging) {
-            publishMessage(
-                topic = SYSTEM_TOPIC,
-                message = "[$identifier] $message",
-                isLastMessage = false
-            )
+            publishMessage(SYSTEM_TOPIC, logMessage)
         }
     }
 
