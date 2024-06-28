@@ -7,5 +7,6 @@ object Uris {
     object Chat {
         const val LISTEN = "$PREFIX/chat/listen"
         const val SEND = "$PREFIX/chat/send"
+        const val SYSTEM = "$PREFIX/chat/system"
     }
 }

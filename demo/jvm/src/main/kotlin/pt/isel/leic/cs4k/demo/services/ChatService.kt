@@ -88,6 +88,12 @@ class ChatService(val broker: Broker) {
     }
 
     /**
+     * Get system topic.
+     * @return The Broker system topic.
+     */
+    fun getSystemTopic() = Broker.SYSTEM_TOPIC
+
+    /**
      * Send a keep alive to all active sseEmitters.
      */
     private fun keepAlive() = lock.withLock {
