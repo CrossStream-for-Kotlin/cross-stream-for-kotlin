@@ -27,12 +27,14 @@ class DemoApplication {
         when (Environment.getCS4KOption()) {
             1F -> BrokerPostgreSQL(
                 Environment.getPostgreSqlDbUrl(),
+                /* preventConsecutiveDuplicateEvents = true, */
                 identifier = node,
                 enableLogging = true
             )
 
             2F -> BrokerRedis(
                 RedisNode(Environment.getRedisHost(), Environment.getRedisPort()),
+                /* preventConsecutiveDuplicateEvents = true, */
                 identifier = node,
                 enableLogging = true
             )
