@@ -84,6 +84,24 @@ class Neighbors {
             }
         }
 
+
+    /**
+     * Updates a neighbor's inbound connection, if it exists.
+     *
+     * @param inetAddress The inet address (IP) of the neighbor.
+     * @param inboundConnection The updated inbound connection.
+     */
+    fun updateInboundConnection(inetAddress: InetAddress, inboundConnection: InboundConnection?) {
+        lock.withLock {
+            val neighbor = set.find { it.inetAddress.hostAddress != "127.0.0.1" && it.inetAddress == inetAddress }
+            if (neighbor != null) {
+                remove(neighbor)
+                val updatedNeighbor = neighbor.copy(inboundConnection = inboundConnection)
+                add(updatedNeighbor)
+            }
+        }
+    }
+
     /**
      * Update a neighbor. If it doesn't exist, it is still added.
      *

@@ -24,6 +24,7 @@ import java.net.NetworkInterface
 class MulticastServiceDiscovery(
     private val neighbors: Neighbors,
     private val selfIp: String,
+    private val brokerIp: String,
     private val sendDatagramPacketAgainTime: Long = DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME
 ) : ServiceDiscovery {
 
@@ -85,8 +86,23 @@ class MulticastServiceDiscovery(
                 multicastSocket.receive(receivedDatagramPacket)
                 val remoteInetAddress = receivedDatagramPacket.address
                 if (remoteInetAddress.hostAddress != selfIp) {
-                    neighbors.add(Neighbor(remoteInetAddress))
-                    logger.info("[{}] <++ '{}'", selfIp, remoteInetAddress)
+                    val receivedMessage = String(receivedDatagramPacket.data, 0, receivedDatagramPacket.length)
+                    val parts = receivedMessage.split(" ")
+                    if (parts.size >= 2) {
+                        val brokerIp = parts[1]
+                        if (brokerIp != null) {
+                            logger.info(
+                                "[{}] Received from {}:{} - '{}'",
+                                selfIp,
+                                remoteInetAddress.hostAddress,
+                                brokerIp,
+                                receivedMessage
+                            )
+                            logger.info("[{}] <++ '{}:{}'", selfIp, remoteInetAddress,brokerIp)
+                            neighbors.add(Neighbor(InetAddress.getByName(brokerIp)))
+                        }
+
+                    }
                 }
             } catch (ex: Exception) {
                 multicastSocket.leaveGroup(multicastInetSocketAddress, networkInterface)
@@ -109,7 +125,7 @@ class MulticastServiceDiscovery(
     private fun periodicAnnounceExistenceToNeighbors(multicastSocket: MulticastSocket) {
         while (!periodicAnnounceExistenceToNeighborsThread.isInterrupted) {
             try {
-                val messageBytes = MESSAGE.toByteArray()
+                val messageBytes = "$MESSAGE $brokerIp".toByteArray()
                 val datagramPacket = DatagramPacket(messageBytes, messageBytes.size, multicastInetSocketAddress)
 
                 multicastSocket.send(datagramPacket)
@@ -137,7 +153,7 @@ class MulticastServiceDiscovery(
         val networkInterfaces = NetworkInterface.getNetworkInterfaces()
         while (networkInterfaces.hasMoreElements()) {
             val networkInterface = networkInterfaces.nextElement()
-            if (networkInterface.isUp && networkInterface.supportsMulticast()) {
+            if (networkInterface.isUp && networkInterface.supportsMulticast() && !networkInterface.isLoopback) {
                 return networkInterface
             }
         }

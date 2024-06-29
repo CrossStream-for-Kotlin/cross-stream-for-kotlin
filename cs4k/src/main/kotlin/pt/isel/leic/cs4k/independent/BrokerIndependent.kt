@@ -56,6 +56,7 @@ import kotlin.time.Duration
  * @property serviceDiscoveryConfig Service Discovery configuration.
  */
 class BrokerIndependent(
+    private val COMMON_PORT: Int,
     private val hostname: String,
     private val serviceDiscoveryConfig: ServiceDiscoveryConfig,
     private val identifier: String = UNKNOWN_IDENTIFIER,
@@ -144,11 +145,23 @@ class BrokerIndependent(
             is DNSServiceDiscoveryConfig ->
                 DNSServiceDiscovery(serviceDiscoveryConfig.hostname, serviceDiscoveryConfig.serviceName, neighbors)
                     .start()
+
             is MulticastServiceDiscoveryConfig ->
-                MulticastServiceDiscovery(neighbors, InetAddress.getByName(serviceDiscoveryConfig.hostname).hostAddress)
+                MulticastServiceDiscovery(
+                    neighbors,
+                    InetAddress.getByName(serviceDiscoveryConfig.hostname).hostAddress,
+                    selfIp
+                )
                     .start()
         }
     }
+
+    /**
+     * Process neighbour inbound connection.
+     *
+     * @param socketChannel The establish inbound socket channel.
+     */
+
 
     /**
      * Process neighbour inbound connection.
@@ -159,37 +172,34 @@ class BrokerIndependent(
         val inetAddress = (socketChannel.remoteAddress as InetSocketAddress).address
         val inboundConnection = InboundConnection(socketChannel)
         logger.info("[{}] <- [{}]", selfIp, inetAddress)
-        val neighbor = neighbors.updateAndGet(inetAddress, inboundConnection)
-        listenSocketChannel(neighbor)
+        neighbors.updateInboundConnection(inetAddress, inboundConnection)
+        listenSocketChannel(inetAddress, inboundConnection)
     }
 
     /**
      * Listen for messages in neighbour inbound connection.
      *
-     * @param neighbor The neighbor who established the connection.
+     * @param inetAddress The inetAddress that established the connection.
+     * @param inboundConnection The inbound connection.
      */
-    private suspend fun listenSocketChannel(neighbor: Neighbor) {
+    private suspend fun listenSocketChannel(inetAddress: InetAddress, inboundConnection: InboundConnection) {
         while (true) {
-            // If the inbound connection is active ...
-            if (neighbor.isInboundConnectionActive) {
-                val inboundConnection = requireNotNull(neighbor.inboundConnection)
-                val socketChannel = requireNotNull(inboundConnection.socketChannel)
-                try {
-                    // ... read the socket channel.
-                    val lineReader = LineReader { socketChannel.readSuspend(it) }
-                    lineReader.readLine()?.let { line ->
-                        logger.info("[{}] <- '{}' <- [{}]", selfIp, line, neighbor.inetAddress)
-                        val event = BrokerSerializer.deserializeEventFromJson(line)
-                        deliverToSubscribers(event)
-                    }
-                } catch (ex: Exception) {
-                    neighbors.update(neighbor.copy(inboundConnection = null))
-                    logger.info("[{}] <-X- [{}]", selfIp, neighbor.inetAddress)
-                    break
+            try {
+                // ... read the socket channel.
+                val lineReader = LineReader { inboundConnection.socketChannel.readSuspend(it) }
+                lineReader.readLine()?.let { line ->
+                    logger.info("[{}:{}]  <- [{}]", selfIp, line, inetAddress.hostAddress)
+                    val event = BrokerSerializer.deserializeEventFromJson(line)
+                    deliverToSubscribers(event)
                 }
+            } catch (ex: Exception) {
+                logger.info("[{}] <-X- [{}]", selfIp, inetAddress.hostAddress)
+                neighbors.updateInboundConnection(inetAddress, null)
+                break
             }
         }
     }
+
 
     /**
      * Periodically refreshing the neighbors.
@@ -392,7 +402,7 @@ class BrokerIndependent(
         private val writeCoroutineDispatcher =
             Executors.newFixedThreadPool(2).asCoroutineDispatcher()
 
-        private const val COMMON_PORT = 6790
+        //private const val COMMON_PORT = 6790
         private const val EVENTS_TO_PROCESS_CAPACITY = 5000
         private const val DEFAULT_WAIT_TIME_TO_REFRESH_NEIGHBOURS_AGAIN = 2000L
         private const val IGNORE_EVENT_ID = -1L

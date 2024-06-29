@@ -16,7 +16,7 @@ data class Neighbor(
     val inetAddress: InetAddress,
     val inboundConnection: InboundConnection? = null,
     val outboundConnection: OutboundConnection? = null,
-    val eventQueue: MessageQueue<Event> = MessageQueue(EVENTS_TO_PROCESS_CAPACITY)
+    val eventQueue: MessageQueue<Event> = MessageQueue(EVENTS_TO_PROCESS_CAPACITY),
 ) {
 
     val isOutboundConnectionActive
