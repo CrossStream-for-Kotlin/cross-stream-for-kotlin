@@ -11,7 +11,7 @@ group = "pt.isel.leic.cs4k.demo"
 version = "0.0.1"
 
 repositories {
-    mavenLocal()
+    // mavenLocal()
     mavenCentral()
 
     // For CS4K Library.
