@@ -16,12 +16,14 @@ import java.net.InetAddress
  *
  * @property hostname The hostname.
  * @property serviceName The service name.
+ * @property port The port number of neighbours.
  * @property neighbors The set of neighbors.
  * @property lookupAgainTime Amount of time, in milliseconds before another DNS query.
  */
 class DNSServiceDiscovery(
     private val hostname: String,
     private val serviceName: String,
+    private val port: Int,
     private val neighbors: Neighbors,
     private val lookupAgainTime: Long = DEFAULT_LOOKUP_AGAIN_TIME
 ) : ServiceDiscovery {
@@ -37,13 +39,13 @@ class DNSServiceDiscovery(
         retryExecutor.execute({ UnexpectedBrokerException() }, {
             try {
                 while (true) {
-                    logger.info("[{}] querying dns server", selfInetAddress.hostAddress)
+                    logger.info("[{}:{}] querying dns server", selfInetAddress.hostAddress, port)
                     dnsLookup()
                     sleep(lookupAgainTime)
                 }
             } catch (ex: Exception) {
                 if (ex is InterruptedException) {
-                    logger.error("[{}] dns lookup interrupted", selfInetAddress.hostAddress)
+                    logger.error("[{}:{}] dns lookup interrupted", selfInetAddress.hostAddress, port)
                 } else {
                     throw ex
                 }
@@ -58,10 +60,10 @@ class DNSServiceDiscovery(
         val neighborsIp = InetAddress.getAllByName(serviceName)
             .filter { it is Inet4Address && it != selfInetAddress }
         val currentNeighbors = neighborsIp
-            .map { Neighbor(it) }
+            .map { Neighbor(it, port) }
             .toSet()
         neighbors.addAll(currentNeighbors)
-        logger.info("[{}] dns lookup:: {}", selfInetAddress.hostAddress, neighborsIp.joinToString(" , "))
+        logger.info("[{}:{}] dns lookup:: {}", selfInetAddress.hostAddress, port, neighborsIp.joinToString(" , "))
     }
 
     override fun start() {
@@ -75,6 +77,6 @@ class DNSServiceDiscovery(
     private companion object {
         private val logger = LoggerFactory.getLogger(DNSServiceDiscovery::class.java)
 
-        private const val DEFAULT_LOOKUP_AGAIN_TIME = 60_000L
+        private const val DEFAULT_LOOKUP_AGAIN_TIME = 3000L
     }
 }

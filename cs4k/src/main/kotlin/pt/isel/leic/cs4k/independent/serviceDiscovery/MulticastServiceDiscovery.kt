@@ -5,6 +5,7 @@ import pt.isel.leic.cs4k.common.BrokerException
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.independent.network.Neighbor
 import pt.isel.leic.cs4k.independent.network.Neighbors
+import pt.isel.leic.cs4k.independent.serviceDiscovery.utils.DatagramPacketInfo
 import java.lang.Thread.sleep
 import java.net.DatagramPacket
 import java.net.InetAddress
@@ -19,11 +20,13 @@ import java.net.NetworkInterface
  *
  * @property neighbors The set of neighbors.
  * @property selfIp The node's own IP address.
+ * @property port The port to announce.
  * @property sendDatagramPacketAgainTime Amount of time, in milliseconds before send another multicast datagram packet.
  */
 class MulticastServiceDiscovery(
     private val neighbors: Neighbors,
     private val selfIp: String,
+    private val port: Int,
     private val sendDatagramPacketAgainTime: Long = DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME
 ) : ServiceDiscovery {
 
@@ -78,26 +81,44 @@ class MulticastServiceDiscovery(
      * @param networkInterface The network interface that supports multicast.
      */
     private fun listenMulticastSocket(multicastSocket: MulticastSocket, networkInterface: NetworkInterface) {
-        logger.info("[{}] reading multicast socket", selfIp)
+        logger.info("[{}:{}] reading multicast socket", selfIp, port)
         while (!listenMulticastSocketThread.isInterrupted) {
             try {
                 val receivedDatagramPacket = DatagramPacket(inboundBuffer, inboundBuffer.size)
                 multicastSocket.receive(receivedDatagramPacket)
-                val remoteInetAddress = receivedDatagramPacket.address
-                if (remoteInetAddress.hostAddress != selfIp) {
-                    neighbors.add(Neighbor(remoteInetAddress))
-                    logger.info("[{}] <++ '{}'", selfIp, remoteInetAddress)
-                }
+
+                processDatagramPacket(receivedDatagramPacket)
             } catch (ex: Exception) {
                 multicastSocket.leaveGroup(multicastInetSocketAddress, networkInterface)
                 multicastSocket.close()
                 if (ex is InterruptedException) {
-                    logger.info("[{}] stop reading multicast socket", selfIp)
+                    logger.info("[{}:{}] stop reading multicast socket", selfIp, port)
                     break
                 } else {
                     throw ex
                 }
             }
+        }
+    }
+
+    /**
+     * Process received datagrams packets.
+     *
+     * @param datagramPacket The datagram packet received.
+     */
+    private fun processDatagramPacket(datagramPacket: DatagramPacket) {
+        val neighbourPort = DatagramPacketInfo
+            .deserialize(String(datagramPacket.data.copyOfRange(0, datagramPacket.length)))
+            .port
+        val neighborInetAddress = datagramPacket.address
+
+        if (selfIp == LOOP_BACK_IP && neighbourPort != port) {
+            val neighborLoopBackInetAddress = InetAddress.getByName(LOOP_BACK_IP)
+            neighbors.add(Neighbor(neighborLoopBackInetAddress, neighbourPort))
+            logger.info("[{}:{}] <++ '{}':'{}'", selfIp, port, neighborLoopBackInetAddress, neighbourPort)
+        } else if (selfIp != LOOP_BACK_IP && neighborInetAddress.hostAddress != selfIp) {
+            neighbors.add(Neighbor(neighborInetAddress, neighbourPort))
+            logger.info("[{}:{}] <++ '{}':'{}'", selfIp, port, neighborInetAddress, neighbourPort)
         }
     }
 
@@ -109,16 +130,16 @@ class MulticastServiceDiscovery(
     private fun periodicAnnounceExistenceToNeighbors(multicastSocket: MulticastSocket) {
         while (!periodicAnnounceExistenceToNeighborsThread.isInterrupted) {
             try {
-                val messageBytes = MESSAGE.toByteArray()
+                val messageBytes = DatagramPacketInfo.serialize(DatagramPacketInfo(port)).toByteArray()
                 val datagramPacket = DatagramPacket(messageBytes, messageBytes.size, multicastInetSocketAddress)
 
                 multicastSocket.send(datagramPacket)
-                logger.info("[{}] ++> '{}'", selfIp, selfIp)
+                logger.info("[{}:{}] ++> '{}':'{}'", selfIp, port, selfIp, port)
                 sleep(sendDatagramPacketAgainTime)
             } catch (ex: Exception) {
                 multicastSocket.close()
                 if (ex is InterruptedException) {
-                    logger.info("[{}] stop announce", selfIp)
+                    logger.info("[{}:{}] stop announce", selfIp, port)
                     break
                 } else {
                     throw ex
@@ -137,7 +158,7 @@ class MulticastServiceDiscovery(
         val networkInterfaces = NetworkInterface.getNetworkInterfaces()
         while (networkInterfaces.hasMoreElements()) {
             val networkInterface = networkInterfaces.nextElement()
-            if (networkInterface.isUp && networkInterface.supportsMulticast()) {
+            if (networkInterface.isUp && networkInterface.supportsMulticast() && !networkInterface.isLoopback) {
                 return networkInterface
             }
         }
@@ -157,12 +178,12 @@ class MulticastServiceDiscovery(
     private companion object {
         private val logger = LoggerFactory.getLogger(MulticastServiceDiscovery::class.java)
 
-        private const val MESSAGE = "HELLO"
         private const val MULTICAST_IP = "228.5.6.7"
         private const val MULTICAST_RECEIVE_PORT = 6789
         private const val MULTICAST_SEND_PORT = 6790
         private const val INBOUND_BUFFER_SIZE = 1024
         private const val TIME_TO_LIVE = 10
-        private const val DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME = 60_000L
+        private const val DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME = 3000L
+        private const val LOOP_BACK_IP = "127.0.0.1"
     }
 }

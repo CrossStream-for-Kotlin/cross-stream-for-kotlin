@@ -47,14 +47,14 @@ class DemoApplication {
 
             4.1F -> BrokerIndependent(
                 Environment.getHostname(),
-                MulticastServiceDiscoveryConfig(Environment.getHostname()),
+                MulticastServiceDiscoveryConfig,
                 identifier = node,
                 enableLogging = true
             )
 
             4.2F -> BrokerIndependent(
                 Environment.getHostname(),
-                DNSServiceDiscoveryConfig(Environment.getHostname(), Environment.getServiceName()),
+                DNSServiceDiscoveryConfig(Environment.getServiceName()),
                 identifier = node,
                 enableLogging = true
             )

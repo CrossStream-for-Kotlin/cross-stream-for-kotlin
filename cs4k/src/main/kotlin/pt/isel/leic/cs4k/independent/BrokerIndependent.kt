@@ -54,6 +54,8 @@ import kotlin.time.Duration
  *
  * @property hostname The hostname.
  * @property serviceDiscoveryConfig Service Discovery configuration.
+ * @property identifier Identifier of instance/node used in logs.
+ * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
 class BrokerIndependent(
     private val hostname: String,
@@ -74,12 +76,16 @@ class BrokerIndependent(
     // The node's own IP address.
     private val selfIp = InetAddress.getByName(hostname).hostAddress
 
+    // The listening port.
+    private var listeningPort: Int? = null
+
     // The queue of events to be processed.
     private val controlQueue = MessageQueue<Event>(EVENTS_TO_PROCESS_CAPACITY)
 
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
+    // The broker thread.
     private val brokerThread: Thread
 
     // Scope for launch coroutines.
@@ -120,17 +126,30 @@ class BrokerIndependent(
     private suspend fun boundServerSocketChannelToAcceptConnection(scope: CoroutineScope) {
         retryExecutor.suspendExecute({ UnexpectedBrokerException() }, {
             AsynchronousServerSocketChannel.open().use { serverSocketChannel ->
-                val inetSocketAddress = InetSocketAddress(selfIp, COMMON_PORT)
-                serverSocketChannel.bind(inetSocketAddress)
-                logger.info("[{}] server socket bound", selfIp)
+                val port = if (serviceDiscoveryConfig is MulticastServiceDiscoveryConfig) {
+                    getRandomPort()
+                } else {
+                    COMMON_PORT
+                }
+                val serviceDiscovery = startServiceDiscovery(port)
+                listeningPort = port
 
-                startServiceDiscovery()
+                try {
+                    val inetSocketAddress = InetSocketAddress(selfIp, port)
+                    serverSocketChannel.bind(inetSocketAddress)
+                    logger.info("[{}:{}] server socket bound", selfIp, port)
 
-                while (true) {
-                    val socketChannel = serverSocketChannel.acceptSuspend()
-                    scope.launch(readCoroutineDispatcher) {
-                        processNeighbourInboundConnection(socketChannel)
+                    serviceDiscovery.start()
+
+                    while (true) {
+                        val socketChannel = serverSocketChannel.acceptSuspend()
+                        scope.launch(readCoroutineDispatcher) {
+                            processNeighbourInboundConnection(socketChannel)
+                        }
                     }
+                } catch (ex: Exception) {
+                    serviceDiscovery.stop()
+                    throw ex
                 }
             }
         })
@@ -138,17 +157,18 @@ class BrokerIndependent(
 
     /**
      * Start service discovery.
+     *
+     * @param port to announce.
+     * @return The service discovery instance.
      */
-    private fun startServiceDiscovery() {
+    private fun startServiceDiscovery(port: Int) =
         when (serviceDiscoveryConfig) {
             is DNSServiceDiscoveryConfig ->
-                DNSServiceDiscovery(serviceDiscoveryConfig.hostname, serviceDiscoveryConfig.serviceName, neighbors)
-                    .start()
+                DNSServiceDiscovery(hostname, serviceDiscoveryConfig.serviceName, COMMON_PORT, neighbors)
             is MulticastServiceDiscoveryConfig ->
-                MulticastServiceDiscovery(neighbors, InetAddress.getByName(serviceDiscoveryConfig.hostname).hostAddress)
-                    .start()
+                MulticastServiceDiscovery(neighbors, selfIp, port)
+            else -> throw UnexpectedBrokerException()
         }
-    }
 
     /**
      * Process neighbour inbound connection.
@@ -158,35 +178,31 @@ class BrokerIndependent(
     private suspend fun processNeighbourInboundConnection(socketChannel: AsynchronousSocketChannel) {
         val inetAddress = (socketChannel.remoteAddress as InetSocketAddress).address
         val inboundConnection = InboundConnection(socketChannel)
-        logger.info("[{}] <- [{}]", selfIp, inetAddress)
-        val neighbor = neighbors.updateAndGet(inetAddress, inboundConnection)
-        listenSocketChannel(neighbor)
+        logger.info("[{}:{}] <- [{}]", selfIp, listeningPort, inetAddress)
+        neighbors.updateInboundConnection(inetAddress, inboundConnection)
+        listenSocketChannel(inetAddress, inboundConnection)
     }
 
     /**
      * Listen for messages in neighbour inbound connection.
      *
-     * @param neighbor The neighbor who established the connection.
+     * @param inetAddress The inetAddress that established the connection.
+     * @param inboundConnection The inbound connection.
      */
-    private suspend fun listenSocketChannel(neighbor: Neighbor) {
+    private suspend fun listenSocketChannel(inetAddress: InetAddress, inboundConnection: InboundConnection) {
         while (true) {
-            // If the inbound connection is active ...
-            if (neighbor.isInboundConnectionActive) {
-                val inboundConnection = requireNotNull(neighbor.inboundConnection)
-                val socketChannel = requireNotNull(inboundConnection.socketChannel)
-                try {
-                    // ... read the socket channel.
-                    val lineReader = LineReader { socketChannel.readSuspend(it) }
-                    lineReader.readLine()?.let { line ->
-                        logger.info("[{}] <- '{}' <- [{}]", selfIp, line, neighbor.inetAddress)
-                        val event = BrokerSerializer.deserializeEventFromJson(line)
-                        deliverToSubscribers(event)
-                    }
-                } catch (ex: Exception) {
-                    neighbors.update(neighbor.copy(inboundConnection = null))
-                    logger.info("[{}] <-X- [{}]", selfIp, neighbor.inetAddress)
-                    break
+            try {
+                // ... read the socket channel.
+                val lineReader = LineReader { inboundConnection.socketChannel.readSuspend(it) }
+                lineReader.readLine()?.let { line ->
+                    logger.info("[{}:{}] <- '{}' <- [{}]", selfIp, listeningPort, line, inetAddress.hostAddress)
+                    val event = BrokerSerializer.deserializeEventFromJson(line)
+                    deliverToSubscribers(event)
                 }
+            } catch (ex: Exception) {
+                logger.info("[{}:{}] <-X- [{}]", selfIp, listeningPort, inetAddress.hostAddress)
+                neighbors.updateInboundConnection(inetAddress, null)
+                break
             }
         }
     }
@@ -203,8 +219,8 @@ class BrokerIndependent(
             neighbors
                 .getAll()
                 .forEach { neighbor ->
-                    if (!neighbor.isOutboundConnectionActive) {
-                        val inetSocketAddress = InetSocketAddress(neighbor.inetAddress, COMMON_PORT)
+                    if (!neighbor.isOutboundConnectionActive && neighbor.port != null) {
+                        val inetSocketAddress = InetSocketAddress(neighbor.inetAddress, neighbor.port)
                         try {
                             val outboundSocketChannel = AsynchronousSocketChannel.open()
                             outboundSocketChannel.connectSuspend(inetSocketAddress)
@@ -220,7 +236,7 @@ class BrokerIndependent(
                                 writeToOutboundConnection(updatedNeighbour)
                             }
 
-                            logger.info("[{}] -> [{}]", selfIp, neighbor.inetAddress)
+                            logger.info("[{}:{}] -> [{}:{}]", selfIp, listeningPort, neighbor.inetAddress, neighbor.port)
                         } catch (ex: Exception) {
                             if (ex is ConnectException || ex is SocketException) {
                                 if (neighbor.outboundConnection?.reachMaximumNumberOfConnectionAttempts == true) {
@@ -240,7 +256,7 @@ class BrokerIndependent(
                                         )
                                     )
                                 }
-                                logger.info("[{}] -X-> [{}]", selfIp, neighbor.inetAddress)
+                                logger.info("[{}:{}] -X-> [{}:{}]", selfIp, listeningPort, neighbor.inetAddress, neighbor.port)
                             } else {
                                 throw ex
                             }
@@ -292,7 +308,7 @@ class BrokerIndependent(
                 try {
                     // ... try to write the event to the socket channel.
                     socketChannel.writeSuspend(eventJson)
-                    logger.info("[{}] -> '{}' -> [{}]", selfIp, eventJson, neighbor.inetAddress)
+                    logger.info("[{}:{}] -> '{}' -> [{}:{}]", selfIp, listeningPort, eventJson, neighbor.inetAddress, neighbor.port)
                 } catch (ex: Exception) {
                     neighbors.update(
                         neighbor.copy(
@@ -303,7 +319,7 @@ class BrokerIndependent(
                         )
                     )
                     neighbor.eventQueue.enqueue(event)
-                    logger.info("[{}] -> '{}' -X-> [{}]", selfIp, eventJson, neighbor.inetAddress)
+                    logger.info("[{}:{}] -> '{}' -X-> [{}:{}]", selfIp, listeningPort, eventJson, neighbor.inetAddress, neighbor.port)
                 }
             } else {
                 neighbors.update(
@@ -325,9 +341,7 @@ class BrokerIndependent(
         val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
 
-        notifyCs4kSystem("[$identifier:$selfIp] new subscriber topic '$topic' id '${subscriber.id}'")
-
-        logger.info("[{}] new subscriber topic '{}' id '{}'", selfIp, topic, subscriber.id)
+        logAndNotifySystemTopic("new subscriber topic '$topic' id '${subscriber.id}'")
 
         return { unsubscribe(topic, subscriber) }
     }
@@ -341,9 +355,7 @@ class BrokerIndependent(
             // Enqueue the event to be processed.
             controlQueue.enqueue(event)
         }
-        notifyCs4kSystem("[$identifier:$selfIp] publish topic '$topic' event '$event'")
-
-        logger.info("[{}] publish topic '{}' event '{}'", selfIp, topic, event)
+        logAndNotifySystemTopic("publish topic '$topic' event '$event'")
     }
 
     override fun shutdown() {
@@ -363,16 +375,17 @@ class BrokerIndependent(
      */
     private fun unsubscribe(topic: String, subscriber: Subscriber) {
         associatedSubscribers.removeIf(topic, { sub -> sub.id == subscriber.id })
-        notifyCs4kSystem("[$identifier:$selfIp] unsubscribe topic '$topic' id '${subscriber.id}'")
-        logger.info("[{}] unsubscribe topic '{}' id '{}'", selfIp, topic, subscriber.id)
+        logAndNotifySystemTopic("unsubscribe topic '$topic' id '${subscriber.id}'")
     }
 
     /**
-     * Notify the topic [SYSTEM_TOPIC] with the message.
+     * Log the message and notify, if logging mode is active, the topic [SYSTEM_TOPIC] with the message.
      *
      * @param message The message to send.
      */
-    private fun notifyCs4kSystem(message: String) {
+    private fun logAndNotifySystemTopic(message: String) {
+        val logMessage = "[$identifier:$selfIp:$listeningPort] $message"
+        logger.info(logMessage)
         if (enableLogging) {
             runBlocking {
                 controlQueue.enqueue(Event(SYSTEM_TOPIC, IGNORE_EVENT_ID, message, false))
@@ -393,6 +406,8 @@ class BrokerIndependent(
             Executors.newFixedThreadPool(2).asCoroutineDispatcher()
 
         private const val COMMON_PORT = 6790
+        private const val FIRST_AVAILABLE_PORT = 6700
+        private const val LAST_AVAILABLE_PORT = 6900
         private const val EVENTS_TO_PROCESS_CAPACITY = 5000
         private const val DEFAULT_WAIT_TIME_TO_REFRESH_NEIGHBOURS_AGAIN = 2000L
         private const val IGNORE_EVENT_ID = -1L
@@ -404,5 +419,11 @@ class BrokerIndependent(
             readCoroutineDispatcher.close()
             writeCoroutineDispatcher.close()
         }
+
+        /**
+         * Get a random port between [FIRST_AVAILABLE_PORT] and [LAST_AVAILABLE_PORT].
+         */
+        private fun getRandomPort() =
+            (FIRST_AVAILABLE_PORT..LAST_AVAILABLE_PORT).random()
     }
 }

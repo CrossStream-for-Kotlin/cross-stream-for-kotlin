@@ -31,7 +31,7 @@ class Neighbors {
      */
     fun add(neighbor: Neighbor) {
         lock.withLock {
-            if (set.none { it.inetAddress == neighbor.inetAddress }) {
+            if (set.none { it.inetAddress == neighbor.inetAddress && it.port == neighbor.port }) {
                 set.add(neighbor)
             }
         }
@@ -55,34 +55,26 @@ class Neighbors {
      */
     fun remove(neighbor: Neighbor) {
         lock.withLock {
-            set.removeIf { it.inetAddress == neighbor.inetAddress }
+            set.removeIf { it.inetAddress == neighbor.inetAddress && it.port == neighbor.port }
         }
     }
 
     /**
-     * Updates a neighbor's inbound connection. If it doesn't exist, it is still added.
+     * Updates a neighbor's inbound connection, if it exists.
      *
      * @param inetAddress The inet address (IP) of the neighbor.
      * @param inboundConnection The updated inbound connection.
-     * @return The updated neighbour.
      */
-    fun updateAndGet(inetAddress: InetAddress, inboundConnection: InboundConnection): Neighbor =
+    fun updateInboundConnection(inetAddress: InetAddress, inboundConnection: InboundConnection?) {
         lock.withLock {
-            val neighbor = set.find { it.inetAddress == inetAddress }
-            return@withLock if (neighbor != null) {
+            val neighbor = set.find { it.inetAddress.hostAddress != LOOP_BACK_IP && it.inetAddress == inetAddress }
+            if (neighbor != null) {
                 remove(neighbor)
                 val updatedNeighbor = neighbor.copy(inboundConnection = inboundConnection)
                 add(updatedNeighbor)
-                updatedNeighbor
-            } else {
-                val newNeighbor = Neighbor(
-                    inetAddress = inetAddress,
-                    inboundConnection = inboundConnection
-                )
-                add(newNeighbor)
-                newNeighbor
             }
         }
+    }
 
     /**
      * Update a neighbor. If it doesn't exist, it is still added.
@@ -94,4 +86,8 @@ class Neighbors {
             remove(neighbor)
             add(neighbor)
         }
+
+    companion object {
+        const val LOOP_BACK_IP = "127.0.0.1"
+    }
 }
