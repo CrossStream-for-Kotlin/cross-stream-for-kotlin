@@ -1,10 +1,11 @@
-package pt.isel.leic.cs4k.independent
+package pt.isel.leic.cs4k.independent.network
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -13,10 +14,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.independent.messaging.LineReader
-import pt.isel.leic.cs4k.independent.network.acceptSuspend
-import pt.isel.leic.cs4k.independent.network.connectSuspend
-import pt.isel.leic.cs4k.independent.network.readSuspend
-import pt.isel.leic.cs4k.independent.network.writeSuspend
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.AsynchronousServerSocketChannel
@@ -112,7 +109,7 @@ class AsynchronousSocketChannelTests {
             logger.info("connect completed")
 
             // read
-            val lineReader = pt.isel.leic.cs4k.independent.messaging.LineReader { socketChannel.readSuspend(it) }
+            val lineReader = LineReader { socketChannel.readSuspend(it) }
             val line = lineReader.readLine()
             assertEquals(line, "Welcome client")
             logger.info("read completed")
@@ -191,14 +188,13 @@ class AsynchronousSocketChannelTests {
         runBlocking {
             val clientSocket = AsynchronousSocketChannel.open()
 
-            val exception = assertThrows<Exception> {
+            assertThrows<Exception> {
                 runBlocking {
                     serverSocket.close()
                     clientSocket.connectSuspend(SERVER_ADDRESS)
                 }
             }
 
-            assertTrue(exception is Exception)
             clientSocket.close()
         }
     }
@@ -234,7 +230,9 @@ class AsynchronousSocketChannelTests {
         } catch (e: Exception) {
             logger.error("Error handling client: ${e.message}")
         } finally {
-            clientSocket.close()
+            withContext(Dispatchers.IO) {
+                clientSocket.close()
+            }
         }
     }
 
