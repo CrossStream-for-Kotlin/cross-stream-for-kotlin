@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Java 17
+      - name: Set up Java 21
         uses: actions/setup-java@v1
         with:
-          java-version: 17
+          java-version: 21
       - name: Uploading package
         env:
           GITHUB_TOKEN_WITH_PACKAGE_PERMISSIONS: ${{ secrets.OSSRH_TOKEN }}
