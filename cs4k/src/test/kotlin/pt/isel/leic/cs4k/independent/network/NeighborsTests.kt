@@ -75,31 +75,18 @@ class NeighborsTests {
     }
 
     @Test
-    fun `test updateAndGet existing neighbor`() {
+    fun `test updateInboundConnection existing neighbor`() {
         val address = InetAddress.getByName("192.168.0.1")
         val inboundConnection1 = mock(InboundConnection::class.java)
         val inboundConnection2 = mock(InboundConnection::class.java)
 
-        val neighbor = Neighbor(address, inboundConnection1)
+        val neighbor = Neighbor(address, inboundConnection = inboundConnection1)
         neighbors.add(neighbor)
 
-        val updatedNeighbor = neighbors.updateAndGet(address, inboundConnection2)
+        neighbors.updateInboundConnection(address, inboundConnection2)
 
-        assertEquals(inboundConnection2, updatedNeighbor.inboundConnection)
         assertEquals(1, neighbors.getAll().size)
-        assertTrue(neighbors.getAll().contains(updatedNeighbor))
-    }
-
-    @Test
-    fun `test updateAndGet new neighbor`() {
-        val address = InetAddress.getByName("192.168.0.1")
-        val inboundConnection = mock(InboundConnection::class.java)
-
-        val updatedNeighbor = neighbors.updateAndGet(address, inboundConnection)
-
-        assertEquals(inboundConnection, updatedNeighbor.inboundConnection)
-        assertEquals(1, neighbors.getAll().size)
-        assertTrue(neighbors.getAll().contains(updatedNeighbor))
+        assertEquals(inboundConnection2, neighbors.getAll().first().inboundConnection)
     }
 
     @Test
@@ -108,7 +95,7 @@ class NeighborsTests {
         val inboundConnection1 = mock(InboundConnection::class.java)
         val inboundConnection2 = mock(InboundConnection::class.java)
 
-        val neighbor = Neighbor(address, inboundConnection1)
+        val neighbor = Neighbor(address, inboundConnection = inboundConnection1)
         neighbors.add(neighbor)
 
         val updatedNeighbor = neighbor.copy(inboundConnection = inboundConnection2)
@@ -186,7 +173,7 @@ class NeighborsTests {
                     for (i in start until end) {
                         val address = ipAddresses[i]
                         if (i % 2 == 0) {
-                            neighbors.updateAndGet(address, mock(InboundConnection::class.java))
+                            neighbors.updateInboundConnection(address, mock(InboundConnection::class.java))
                         } else {
                             val neighbor = Neighbor(address, inboundConnection = mock(InboundConnection::class.java))
                             neighbors.remove(neighbor)
