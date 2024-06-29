@@ -150,7 +150,7 @@ class BrokerRedis(
 
         getLastEvent(topic)?.let { event ->
             if (preventConsecutiveDuplicateEvents) {
-                associatedSubscribers.updateLastEventIdReceived(topic, subscriber, event.id)
+                associatedSubscribers.updateLastEventIdReceived(topic, subscriber.id, event.id)
             }
             handler(event)
         }

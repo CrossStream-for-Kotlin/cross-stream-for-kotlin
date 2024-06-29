@@ -1,5 +1,6 @@
 package pt.isel.leic.cs4k.common
 
+import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -112,13 +113,13 @@ class AssociatedSubscribers {
      * Update the last event identifier received by the subscriber.
      *
      * @param topic The topic to which the subscriber is subscribed.
-     * @param subscriber The subscriber.
+     * @param subscriberId The identifier of the subscriber.
      * @param eventId The new last event identifier.
      */
-    fun updateLastEventIdReceived(topic: String, subscriber: BaseSubscriber, eventId: Long) {
+    fun updateLastEventIdReceived(topic: String, subscriberId: UUID, eventId: Long) {
         lock.withLock {
             val subscribers = map[topic] ?: return
-            val subscriberToUpdate = subscribers.find { sub -> sub == subscriber } ?: return
+            val subscriberToUpdate = subscribers.find { sub -> sub.id == subscriberId } ?: return
             val updatedSubscriber = (subscriberToUpdate as SubscriberWithEventTracking).copy(
                 lastEventIdReceived = eventId
             )
