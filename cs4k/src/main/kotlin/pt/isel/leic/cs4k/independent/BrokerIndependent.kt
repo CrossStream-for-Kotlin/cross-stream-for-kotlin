@@ -17,6 +17,7 @@ import pt.isel.leic.cs4k.common.BrokerException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.BrokerSerializer
+import pt.isel.leic.cs4k.common.BrokerThreadType
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
@@ -44,7 +45,7 @@ import java.net.InetSocketAddress
 import java.net.SocketException
 import java.nio.channels.AsynchronousServerSocketChannel
 import java.nio.channels.AsynchronousSocketChannel
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 import kotlin.time.Duration
@@ -54,12 +55,17 @@ import kotlin.time.Duration
  *
  * @property hostname The hostname.
  * @property serviceDiscoveryConfig Service Discovery configuration.
+ * @property identifier Identifier of instance/node used in logs.
+ * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
+ * @param brokerThreadType The type of thread used for listening for events and connecting
+ * to neighbors.
  */
 class BrokerIndependent(
     private val hostname: String,
     private val serviceDiscoveryConfig: ServiceDiscoveryConfig,
     private val identifier: String = UNKNOWN_IDENTIFIER,
-    private val enableLogging: Boolean = false
+    private val enableLogging: Boolean = false,
+    brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
 ) : Broker {
 
     // Shutdown state.
@@ -80,32 +86,46 @@ class BrokerIndependent(
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
+    // Thread where coroutines will be created from.
     private val brokerThread: Thread
 
     // Scope for launch coroutines.
     private lateinit var scope: CoroutineScope
 
     init {
-        brokerThread = thread {
-            runBlocking {
-                supervisorScope {
-                    scope = this
-                    val boundServerSocketChannelToAcceptConnectionJob = this.launch(readCoroutineDispatcher) {
-                        boundServerSocketChannelToAcceptConnection(this)
-                    }
-                    val periodicConnectToNeighboursJob = this.launch(writeCoroutineDispatcher) {
-                        periodicConnectToNeighbours(this)
-                    }
-                    val processEventsJob = this.launch(writeCoroutineDispatcher) {
-                        processEvents()
-                    }
+        brokerThread = if (brokerThreadType == BrokerThreadType.REGULAR) {
+            thread {
+                setup()
+            }
+        } else {
+            Thread.startVirtualThread {
+                setup()
+            }
+        }
+    }
 
-                    joinAll(
-                        boundServerSocketChannelToAcceptConnectionJob,
-                        periodicConnectToNeighboursJob,
-                        processEventsJob
-                    )
+    /**
+     * Does the initial steps to start up.
+     */
+    private fun setup() {
+        runBlocking {
+            supervisorScope {
+                scope = this
+                val boundServerSocketChannelToAcceptConnectionJob = this.launch(readCoroutineDispatcher) {
+                    boundServerSocketChannelToAcceptConnection(this)
                 }
+                val periodicConnectToNeighboursJob = this.launch(writeCoroutineDispatcher) {
+                    periodicConnectToNeighbours(this)
+                }
+                val processEventsJob = this.launch(writeCoroutineDispatcher) {
+                    processEvents()
+                }
+
+                joinAll(
+                    boundServerSocketChannelToAcceptConnectionJob,
+                    periodicConnectToNeighboursJob,
+                    processEventsJob
+                )
             }
         }
     }
@@ -144,6 +164,7 @@ class BrokerIndependent(
             is DNSServiceDiscoveryConfig ->
                 DNSServiceDiscovery(serviceDiscoveryConfig.hostname, serviceDiscoveryConfig.serviceName, neighbors)
                     .start()
+
             is MulticastServiceDiscoveryConfig ->
                 MulticastServiceDiscovery(neighbors, InetAddress.getByName(serviceDiscoveryConfig.hostname).hostAddress)
                     .start()
