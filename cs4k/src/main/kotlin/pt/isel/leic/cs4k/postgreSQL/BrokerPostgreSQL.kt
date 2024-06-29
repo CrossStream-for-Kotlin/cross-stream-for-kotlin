@@ -16,6 +16,7 @@ import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.BrokerException.UnauthorizedTopicException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.BrokerSerializer
+import pt.isel.leic.cs4k.common.BrokerThreadType
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
@@ -25,7 +26,7 @@ import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.Listen
 import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.UnListen
 import java.sql.Connection
 import java.sql.SQLException
-import java.util.UUID
+import java.util.*
 import kotlin.concurrent.thread
 
 /**
@@ -36,13 +37,15 @@ import kotlin.concurrent.thread
  * @property dbConnectionPoolSize The maximum size that the JDBC connection pool is allowed to reach.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
+ * @param brokerThreadType The type of thread used for listening for events.
  */
 class BrokerPostgreSQL(
     private val postgreSQLDbUrl: String,
     private val preventConsecutiveDuplicateEvents: Boolean = false,
     private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
     private val identifier: String = UNKNOWN_IDENTIFIER,
-    private val enableLogging: Boolean = false
+    private val enableLogging: Boolean = false,
+    brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
 ) : Broker {
 
     init {
@@ -72,19 +75,33 @@ class BrokerPostgreSQL(
         !(throwable is SQLException && connectionPool.isClosed)
     }
 
+    // Listening thread, where events will be processed.
     private val listeningThread: Thread
 
     init {
         // Create the events table if it does not exist.
         createEventsTable()
 
-        // Start a new thread to ...
-        listeningThread = thread {
-            // ... listen for notifications and ...
-            listen()
-            // ... wait for notifications.
-            waitForNotification()
+        // Start a new thread to start setup.
+        listeningThread = if (brokerThreadType == BrokerThreadType.REGULAR) {
+            thread {
+                setup()
+            }
+        } else {
+            Thread.startVirtualThread {
+                setup()
+            }
         }
+    }
+
+    /**
+     * Does the initial steps to start up.
+     */
+    private fun setup() {
+        // Listen for notifications and ...
+        listen()
+        // ... wait for notifications.
+        waitForNotification()
     }
 
     override fun subscribe(topic: String, handler: (event: Event) -> Unit): () -> Unit {

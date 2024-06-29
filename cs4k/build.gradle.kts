@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "pt.isel.leic.cs4k"
-version = "0.1.6"
+version = "0.1.7"
 
 repositories {
     mavenCentral()
@@ -69,7 +69,7 @@ tasks.test {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 tasks.named("check") {
