@@ -7,7 +7,6 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
-import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
@@ -18,16 +17,17 @@ import kotlin.time.Duration
 
 /**
  * Manager of connections created from a single connection.
- * @param connection The connection from which channels are created from.
- * @param maxChannels The maximum amount of channels that can be created at once.
+ *
+ * @property connection The connection from which channels are created from.
+ * @property maxChannels The maximum amount of channels that can be created at once.
  */
 class ChannelPool(
     private val connection: Connection,
     private val maxChannels: Int = 1023
 ) : Closeable {
 
-    // There can't be negative channel numbers.
     init {
+        // There can't be negative channel numbers.
         require(maxChannels > 0) { "Channel count must be higher than 0." }
     }
 
@@ -36,6 +36,7 @@ class ChannelPool(
 
     /**
      * Information related to the channel.
+     *
      * @property channel The channel.
      * @property consumerTag The consumerTag linked with a consumption done in this channel. If null, then the channel
      * isn't being used for consuming.
@@ -54,6 +55,7 @@ class ChannelPool(
 
     /**
      * Request for a new channel.
+     *
      * @property continuation Remainder of the code that is resumed when channel is obtained.
      * @property channel The channel that the requester will receive.
      */
@@ -68,6 +70,7 @@ class ChannelPool(
     /**
      * Obtain a new channel. If no channels are available and max capacity is reached, it will passively wait for a new
      * connection given by another thread.
+     *
      * @return An unused channel, if timeout isn't reached.
      */
     private suspend fun getChannel(): Channel {
@@ -104,11 +107,14 @@ class ChannelPool(
     /**
      * Obtain a new channel. If no channels are available and max capacity is reached, it will passively wait for a new
      * connection given by another thread or until timeout is reached.
+     *
      * @param timeout Maximum amount of time waiting to fetch a new channel.
      * @return An unused channel, if timeout isn't reached.
      */
     fun getChannel(timeout: Duration = Duration.INFINITE): Channel {
-        if (isClosed) throw IOException("Pool already closed - cannot obtain new channels")
+        if (isClosed) {
+            throw IOException("Pool already closed - cannot obtain new channels")
+        }
         return runBlocking {
             var result: Channel? = null
             try {
@@ -128,6 +134,7 @@ class ChannelPool(
 
     /**
      * Makes the channel free for the taking.
+     *
      * @param channel The channel that the user doesn't want to use.
      */
     fun stopUsingChannel(channel: Channel) {
@@ -159,9 +166,5 @@ class ChannelPool(
             connection.close()
             channels.clear()
         }
-    }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(ChannelPool::class.java)
     }
 }

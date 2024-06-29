@@ -86,7 +86,7 @@ class RetryExecutorTests {
     }
 
     @Test
-    fun `execute should retry when retryCondition is false`() {
+    fun `execute should throw when retryCondition is false`() {
         // Arrange
         var retries = 0
 
@@ -189,7 +189,7 @@ class RetryExecutorTests {
     }
 
     @Test
-    fun `execute suspend should retry when retryCondition is false`() {
+    fun `execute suspend should throw when retryCondition is false`() {
         // Arrange
         var retries = 0
 

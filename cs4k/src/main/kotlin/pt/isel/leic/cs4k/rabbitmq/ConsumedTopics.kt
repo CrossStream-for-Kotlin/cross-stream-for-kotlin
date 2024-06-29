@@ -17,6 +17,7 @@ class ConsumedTopics {
 
     /**
      * Information about events being consumed from the stream.
+     *
      * @property offset The offset of the message in the stream.
      * @property lastEvent The most recent event made from the consumed message.
      */
@@ -33,8 +34,9 @@ class ConsumedTopics {
 
     /**
      * Structure of an offset request.
-     * @param continuation Remainder of the code that is resumed when offset is obtained.
-     * @param offset The offset of the last event of the topic.
+     *
+     * @property continuation Remainder of the code that is resumed when offset is obtained.
+     * @property offset The offset of the last event of the topic.
      */
     private class OffsetRequest(
         val continuation: Continuation<Unit>,
@@ -46,6 +48,7 @@ class ConsumedTopics {
 
     /**
      * Create and set the latest event in a topic.
+     *
      * @param topic The topic of the event.
      * @param message The message of the event.
      * @param isLast If the event in question is the last of a given topic.
@@ -63,6 +66,7 @@ class ConsumedTopics {
 
     /**
      * Obtain all information that is currently stored.
+     *
      * @return All information stored.
      */
     fun getAllLatestEventInfos(): List<ConsumeInfo> = lock.withLock {
@@ -72,6 +76,7 @@ class ConsumedTopics {
 
     /**
      * Full populates the map with information regarding certain topics.
+     *
      * @param events New information about topics.
      */
     fun fullUpdate(events: List<ConsumeInfo>) = lock.withLock {
@@ -94,6 +99,7 @@ class ConsumedTopics {
     /**
      * Reading the latest offset stored.
      * If there are no available offsets, then it will passively wait until notified.
+     *
      * @return The latest offset available.
      */
     private suspend fun getMaximumOffset(): Long? {
@@ -130,6 +136,7 @@ class ConsumedTopics {
     /**
      * Reading the latest offset stored.
      * If there are no available offsets, then it will passively wait until notified or until timeout is reached.
+     *
      * @param timeout Maximum amount of wait tine.
      * @return The latest offset, if able to be obtained.
      */
@@ -149,6 +156,7 @@ class ConsumedTopics {
 
     /**
      * Reading the latest offset stored without waiting.
+     *
      * @return The latest offset, if able to be obtained.
      */
     fun getMaximumOffsetNoWait(): Long? = lock.withLock {
@@ -157,6 +165,7 @@ class ConsumedTopics {
 
     /**
      * Obtain the latest topic. When both sent and received are defined, received is prioritized.
+     *
      * @param topic The topic of the event desired.
      * @return The latest event of the topic.
      */

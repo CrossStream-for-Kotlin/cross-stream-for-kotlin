@@ -17,8 +17,11 @@ import pt.isel.leic.cs4k.common.BrokerException.NodeListIsEmptyException
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
-import pt.isel.leic.cs4k.rabbitmq.HistoryShareMessage.HistoryShareMessageType.REQUEST
-import pt.isel.leic.cs4k.rabbitmq.HistoryShareMessage.HistoryShareMessageType.RESPONSE
+import pt.isel.leic.cs4k.rabbitmq.historyShare.HistoryShareMessage
+import pt.isel.leic.cs4k.rabbitmq.historyShare.HistoryShareMessage.HistoryShareMessageType.REQUEST
+import pt.isel.leic.cs4k.rabbitmq.historyShare.HistoryShareMessage.HistoryShareMessageType.RESPONSE
+import pt.isel.leic.cs4k.rabbitmq.historyShare.HistoryShareRequest
+import pt.isel.leic.cs4k.rabbitmq.historyShare.HistoryShareResponse
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -30,7 +33,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * @param clusterNodes The list of Rabbit nodes.
  * @param username The username used as credentials for RabbitMQ.
  * @param password The password used as credentials for RabbitMQ.
- * @property identifier Identifier of instance/node used in logging mode.
+ * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
 class BrokerRabbit(
@@ -48,7 +51,7 @@ class BrokerRabbit(
      * @param node The rabbit node.
      * @param username The username used as credentials for RabbitMQ.
      * @param password The password used as credentials for RabbitMQ.
-     * @property identifier Identifier of instance/node used in logging mode.
+     * @property identifier Identifier of instance/node used in logs.
      * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
      */
     constructor(
@@ -63,7 +66,9 @@ class BrokerRabbit(
 
     init {
         // Checking node list.
-        if (clusterNodes.isEmpty()) throw NodeListIsEmptyException()
+        if (clusterNodes.isEmpty()) {
+            throw NodeListIsEmptyException()
+        }
     }
 
     // Association between topics and subscribers lists.
@@ -72,6 +77,7 @@ class BrokerRabbit(
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
+    // Retry condition.
     private val retryCondition: (throwable: Throwable) -> Boolean = { throwable ->
         !(throwable is IOException && consumingChannelPool.isClosed && publishingChannelPool.isClosed)
     }
@@ -79,7 +85,7 @@ class BrokerRabbit(
     // Factory where connections are created.
     private val factory = createFactory(username, password)
 
-    // Channel pool
+    // Channel pool.
     private val consumingChannelPool =
         ChannelPool(factory.newConnection(clusterNodes.map { Address(it.host, it.port) }))
     private val publishingChannelPool =
@@ -102,12 +108,14 @@ class BrokerRabbit(
 
     /**
      * Consumer used for processing messages coming from stream.
+     *
      * @param channel Channel where messages are coming from.
      */
     private inner class BrokerConsumer(channel: Channel) : DefaultConsumer(channel) {
 
         /**
          * Converting the received message into an event before notifying the subscribers.
+         *
          * @param message The message received from the queue.
          * @param offset The offset of the message.
          */
@@ -147,6 +155,7 @@ class BrokerRabbit(
 
     /**
      * Consumer used to receive requests for offsets and events and sends them out as responses.
+     *
      * @param channel Channel where requests come from.
      */
     private inner class HistoryShareHandler(channel: Channel) : DefaultConsumer(channel) {
@@ -156,6 +165,7 @@ class BrokerRabbit(
 
         /**
          * Processes the request and sends out a response including the stored offsets and events.
+         *
          * @param request The request received.
          */
         private fun handleRequest(request: HistoryShareRequest) {
@@ -176,6 +186,7 @@ class BrokerRabbit(
 
         /**
          * Processes the response and stores all the information given.
+         *
          * @param response The response received.
          */
         private fun handleResponse(response: HistoryShareResponse) {
@@ -309,12 +320,13 @@ class BrokerRabbit(
     }
 
     override fun subscribe(topic: String, handler: (event: Event) -> Unit): () -> Unit {
-        if (isShutdown.get()) throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        if (isShutdown.get()) {
+            throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        }
 
         val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
-        logger.info("new subscriber topic '{}' id '{}'", topic, subscriber.id)
-        publishCs4kSystem("new subscriber topic $topic id ${subscriber.id}")
+        logAndPublishToSystemTopic("new subscriber topic $topic id ${subscriber.id}")
 
         getLastEvent(topic)?.let { event -> handler(event) }
 
@@ -323,44 +335,46 @@ class BrokerRabbit(
 
     /**
      * Obtain the last event of the topic stored within the broker.
+     *
      * @param topic The topic of the desired event.
      */
     private fun getLastEvent(topic: String) = consumedTopics.getLatestEvent(topic)
 
     /**
      * Canceling a previously-made subscription.
+     *
      * @param topic The topic previously subscribed to.
      * @param subscriber The subscriber wanting ot cancel the subscription.
      */
     private fun unsubscribe(topic: String, subscriber: Subscriber) {
-        associatedSubscribers.removeIf(topic, { it.id.toString() == subscriber.id.toString() })
-        logger.info("unsubscribe topic '{}' id '{}", topic, subscriber.id)
-        publishCs4kSystem("unsubscribe topic $topic id ${subscriber.id}")
+        associatedSubscribers.removeIf(topic, { it.id == subscriber.id })
+        logAndPublishToSystemTopic("unsubscribe topic $topic id ${subscriber.id}")
     }
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
-        if (isShutdown.get()) throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        if (isShutdown.get()) {
+            throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        }
+
         publishToStream(topic, message, isLastMessage)
     }
 
-    private fun publishToStream(topic: String, message: String, isLastMessage: Boolean) {
+    /**
+     * Publish a message to stream.
+     *
+     * @param topic The topic name.
+     * @param message The message to send.
+     * @param isLastMessage Indicates if the message is the last one.
+     */
+    private fun publishToStream(topic: String, message: String, isLastMessage: Boolean = false) {
         val body = Message.serialize(Message(topic, message, isLastMessage)).toByteArray()
         retryExecutor.execute({ BrokerLostConnectionException() }, {
             val channel = publishingChannelPool.getChannel()
             channel.basicPublish("", streamName, null, body)
             publishingChannelPool.stopUsingChannel(channel)
         }, retryCondition)
-        logger.info("publish topic '{}' event message '{}'", topic, message)
-        if (topic != SYSTEM_TOPIC) publishCs4kSystem("notify topic $topic event message $message")
-    }
-
-    private fun publishCs4kSystem(message: String) {
-        if (enableLogging) {
-            publishToStream(
-                SYSTEM_TOPIC,
-                "[$identifier] $message",
-                false
-            )
+        if (topic != SYSTEM_TOPIC) {
+            logAndPublishToSystemTopic("notify topic $topic event message $message")
         }
     }
 
@@ -374,6 +388,19 @@ class BrokerRabbit(
         }
     }
 
+    /**
+     * Log the message and publish, if logging mode is active, the topic [SYSTEM_TOPIC] with the message.
+     *
+     * @param message The message to send.
+     */
+    private fun logAndPublishToSystemTopic(message: String) {
+        val logMessage = "[$identifier] $message"
+        logger.info(logMessage)
+        if (enableLogging) {
+            publishToStream(SYSTEM_TOPIC, logMessage)
+        }
+    }
+
     private companion object {
         // Logger instance for logging Broker class information.
         private val logger = LoggerFactory.getLogger(BrokerRabbit::class.java)
@@ -381,8 +408,7 @@ class BrokerRabbit(
         // Default value for QoS or prefetch for un-acked messages, required for stream consumption.
         private const val DEFAULT_PREFETCH_VALUE = 100
 
-        // Default value for subscription delay, used as a timeout waiting for receiving history from another
-        // broker.
+        // Default value for subscription delay, used as a timeout waiting for receiving history from another broker.
         private const val DEFAULT_SUBSCRIBE_DELAY_MILLIS = 1000L
 
         // Default value for the common stream size, in bytes.
@@ -394,6 +420,9 @@ class BrokerRabbit(
 
         /**
          * Creates the creator of connections for accessing RabbitMQ broker.
+         *
+         * @param username The username used as credentials.
+         * @param password The password used as credentials.
          */
         private fun createFactory(username: String, password: String): ConnectionFactory {
             val factory = ConnectionFactory()
