@@ -1,6 +1,9 @@
 package pt.isel.leic.cs4k.rabbitmq
 
 import pt.isel.leic.cs4k.common.Event
+import pt.isel.leic.cs4k.rabbitmq.historyShare.HistoryShareMessage
+import pt.isel.leic.cs4k.rabbitmq.historyShare.HistoryShareRequest
+import pt.isel.leic.cs4k.rabbitmq.historyShare.HistoryShareResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
