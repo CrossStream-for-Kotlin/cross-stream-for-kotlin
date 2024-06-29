@@ -353,7 +353,9 @@ class BrokerIndependent(
     }
 
     override fun subscribe(topic: String, handler: (event: Event) -> Unit): () -> Unit {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        }
 
         val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
@@ -364,8 +366,12 @@ class BrokerIndependent(
     }
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
-        if (topic == SYSTEM_TOPIC) throw BrokerException.UnauthorizedTopicException()
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::publish.name}.")
+        }
+        if (topic == SYSTEM_TOPIC) {
+            throw BrokerException.UnauthorizedTopicException()
+        }
 
         val event = Event(topic, IGNORE_EVENT_ID, message, isLastMessage)
         runBlocking {
@@ -376,7 +382,10 @@ class BrokerIndependent(
     }
 
     override fun shutdown() {
-        if (isShutdown) throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
+        if (isShutdown) {
+            throw BrokerTurnOffException("Cannot invoke ${::shutdown.name}.")
+        }
+
         isShutdown = true
         scope.cancel()
         closeCoroutineDispatchers()
@@ -440,7 +449,6 @@ class BrokerIndependent(
         /**
          * Get a random port between [FIRST_AVAILABLE_PORT] and [LAST_AVAILABLE_PORT].
          */
-        private fun getRandomPort() =
-            (FIRST_AVAILABLE_PORT..LAST_AVAILABLE_PORT).random()
+        private fun getRandomPort() = (FIRST_AVAILABLE_PORT..LAST_AVAILABLE_PORT).random()
     }
 }
