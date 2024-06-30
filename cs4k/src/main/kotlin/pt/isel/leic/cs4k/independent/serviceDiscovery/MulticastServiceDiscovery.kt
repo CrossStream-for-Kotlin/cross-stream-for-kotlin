@@ -8,6 +8,7 @@ import pt.isel.leic.cs4k.independent.network.Neighbors
 import pt.isel.leic.cs4k.independent.serviceDiscovery.utils.DatagramPacketInfo
 import java.lang.Thread.sleep
 import java.net.DatagramPacket
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.MulticastSocket
@@ -112,13 +113,13 @@ class MulticastServiceDiscovery(
             .port
         val neighborInetAddress = datagramPacket.address
 
-        if (selfIp == LOOP_BACK_IP && neighbourPort != port) {
+        if (selfIp != LOOP_BACK_IP && neighborInetAddress.hostAddress != selfIp) {
+            neighbors.add(Neighbor(neighborInetAddress, neighbourPort))
+            logger.info("[{}:{}] <++ '{}':'{}'", selfIp, port, neighborInetAddress, neighbourPort)
+        } else if (selfIp == LOOP_BACK_IP && neighbourPort != port) {
             val neighborLoopBackInetAddress = InetAddress.getByName(LOOP_BACK_IP)
             neighbors.add(Neighbor(neighborLoopBackInetAddress, neighbourPort))
             logger.info("[{}:{}] <++ '{}':'{}'", selfIp, port, neighborLoopBackInetAddress, neighbourPort)
-        } else if (selfIp != LOOP_BACK_IP && neighborInetAddress.hostAddress != selfIp) {
-            neighbors.add(Neighbor(neighborInetAddress, neighbourPort))
-            logger.info("[{}:{}] <++ '{}':'{}'", selfIp, port, neighborInetAddress, neighbourPort)
         }
     }
 
@@ -159,7 +160,13 @@ class MulticastServiceDiscovery(
         while (networkInterfaces.hasMoreElements()) {
             val networkInterface = networkInterfaces.nextElement()
             if (networkInterface.isUp && networkInterface.supportsMulticast() && !networkInterface.isLoopback) {
-                return networkInterface
+                if (selfIp != LOOP_BACK_IP) {
+                    return networkInterface
+                } else if (!networkInterface.name.startsWith("eth") &&
+                    networkInterface.inetAddresses().anyMatch { it is Inet4Address }
+                ) {
+                    return networkInterface
+                }
             }
         }
         throw Exception("[$selfIp] There is no active network interface that supports multicast!")
