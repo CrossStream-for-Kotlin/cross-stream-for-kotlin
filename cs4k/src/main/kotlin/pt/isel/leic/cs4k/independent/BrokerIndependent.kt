@@ -24,7 +24,6 @@ import pt.isel.leic.cs4k.common.BrokerThreadType
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
-import pt.isel.leic.cs4k.common.SubscriberWithEventTracking
 import pt.isel.leic.cs4k.independent.messaging.LineReader
 import pt.isel.leic.cs4k.independent.messaging.MessageQueue
 import pt.isel.leic.cs4k.independent.network.ConnectionState.CONNECTED
@@ -55,7 +54,6 @@ import kotlin.time.Duration
  *
  * @property hostname The hostname.
  * @property serviceDiscoveryConfig Service Discovery configuration.
- * @property preventConsecutiveDuplicateEvents Prevent consecutive duplicate events.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  * @param brokerThreadType The type of thread used for listening for events and connecting
@@ -64,7 +62,6 @@ import kotlin.time.Duration
 class BrokerIndependent(
     private val hostname: String,
     private val serviceDiscoveryConfig: ServiceDiscoveryConfig,
-    private val preventConsecutiveDuplicateEvents: Boolean = false,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false,
     brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
@@ -315,27 +312,10 @@ class BrokerIndependent(
      * Deliver event to subscribers, i.e., call all subscriber handlers of the event topic.
      */
     private fun deliverToSubscribers(event: Event) {
-        val associatedSubscribers = if (preventConsecutiveDuplicateEvents) {
-            associatedSubscribers.getAndUpdateAll(event.topic, event.id)
-        } else {
-            associatedSubscribers.getAll(event.topic)
-        }
-        associatedSubscribers.forEach { subscriber -> subscriber.handler(event) }
+        associatedSubscribers
+            .getAll(event.topic)
+            .forEach { subscriber -> subscriber.handler(event) }
     }
-
-    /**
-     * Create a subscriber.
-     *
-     * @param id The identifier of a subscriber.
-     * @param handler The handler to be called when there is a new event.
-     * @return The subscriber created.
-     */
-    private fun createSubscriber(id: UUID, handler: (event: Event) -> Unit) =
-        if (preventConsecutiveDuplicateEvents) {
-            SubscriberWithEventTracking(id, handler)
-        } else {
-            Subscriber(id, handler)
-        }
 
     /**
      * Write to neighbour outbound connection.
@@ -379,7 +359,7 @@ class BrokerIndependent(
             throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
         }
 
-        val subscriber = createSubscriber(UUID.randomUUID(), handler)
+        val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
 
         logAndNotifySystemTopic("new subscriber topic '$topic' id '${subscriber.id}'")
