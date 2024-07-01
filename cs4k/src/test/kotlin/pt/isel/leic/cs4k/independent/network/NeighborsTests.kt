@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import java.net.InetAddress
+import kotlin.test.assertNull
 
 class NeighborsTests {
 
@@ -24,12 +25,15 @@ class NeighborsTests {
 
     @Test
     fun `test add and get all neighbors`() {
+        // Arrange
         val neighbor1 = Neighbor(InetAddress.getByName("192.168.0.1"))
         val neighbor2 = Neighbor(InetAddress.getByName("192.168.0.2"))
 
+        // Act
         neighbors.add(neighbor1)
         neighbors.add(neighbor2)
 
+        // Assert
         val allNeighbors = neighbors.getAll()
         assertEquals(2, allNeighbors.size)
         assertTrue(allNeighbors.contains(neighbor1))
@@ -38,24 +42,30 @@ class NeighborsTests {
 
     @Test
     fun `test add duplicate neighbor`() {
+        // Arrange
         val neighbor = Neighbor(InetAddress.getByName("192.168.0.1"))
 
+        // Act
         neighbors.add(neighbor)
         neighbors.add(neighbor)
 
+        // Assert
         val allNeighbors = neighbors.getAll()
         assertEquals(1, allNeighbors.size)
     }
 
     @Test
     fun `test addAll neighbors`() {
+        // Arrange
         val neighbor1 = Neighbor(InetAddress.getByName("192.168.0.1"))
         val neighbor2 = Neighbor(InetAddress.getByName("192.168.0.2"))
         val neighbor3 = Neighbor(InetAddress.getByName("192.168.0.3"))
 
+        // Act
         neighbors.addAll(setOf(neighbor1, neighbor2))
         neighbors.addAll(setOf(neighbor2, neighbor3))
 
+        // Assert
         val allNeighbors = neighbors.getAll()
         assertEquals(3, allNeighbors.size)
         assertTrue(allNeighbors.contains(neighbor1))
@@ -65,42 +75,51 @@ class NeighborsTests {
 
     @Test
     fun `test remove neighbor`() {
+        // Arrange
         val neighbor = Neighbor(InetAddress.getByName("192.168.0.1"))
 
+        // Act
         neighbors.add(neighbor)
         neighbors.remove(neighbor)
 
+        // Assert
         val allNeighbors = neighbors.getAll()
         assertTrue(allNeighbors.isEmpty())
     }
 
     @Test
     fun `test updateInboundConnection existing neighbor`() {
+        // Arrange
         val address = InetAddress.getByName("192.168.0.1")
         val inboundConnection1 = mock(InboundConnection::class.java)
         val inboundConnection2 = mock(InboundConnection::class.java)
 
+        // Act
         val neighbor = Neighbor(address, inboundConnection = inboundConnection1)
         neighbors.add(neighbor)
 
         neighbors.updateInboundConnection(address, inboundConnection2)
 
+        // Assert
         assertEquals(1, neighbors.getAll().size)
         assertEquals(inboundConnection2, neighbors.getAll().first().inboundConnection)
     }
 
     @Test
     fun `test update neighbor`() {
+        // Arrange
         val address = InetAddress.getByName("192.168.0.1")
         val inboundConnection1 = mock(InboundConnection::class.java)
         val inboundConnection2 = mock(InboundConnection::class.java)
 
+        // Act
         val neighbor = Neighbor(address, inboundConnection = inboundConnection1)
         neighbors.add(neighbor)
 
         val updatedNeighbor = neighbor.copy(inboundConnection = inboundConnection2)
         neighbors.update(updatedNeighbor)
 
+        // Assert
         val allNeighbors = neighbors.getAll()
         assertEquals(1, allNeighbors.size)
         assertTrue(allNeighbors.contains(updatedNeighbor))
@@ -110,8 +129,10 @@ class NeighborsTests {
     @Test
     fun `stress test adding multiple neighbors`() {
         runBlocking {
+            // Arrange
             val jobs = mutableListOf<Job>()
 
+            // Act
             repeat(NUMBER_COROUTINES) { coroutineIndex ->
                 jobs.add(
                     launch(Dispatchers.Default) {
@@ -126,6 +147,7 @@ class NeighborsTests {
 
             jobs.joinAll()
 
+            // Assert
             val allNeighbors = neighbors.getAll()
             allNeighbors.forEach { neighbor ->
                 assertNotNull(neighbor.inetAddress)
@@ -139,6 +161,7 @@ class NeighborsTests {
 
     @Test
     fun `stress test adding multiple neighbors and then update or remove randomly`() = runBlocking {
+        // Arrange
         val addJobs = mutableListOf<Job>()
         val updateRemoveJobs = mutableListOf<Job>()
 
@@ -146,6 +169,7 @@ class NeighborsTests {
             InetAddress.getByName("192.168.${i / 255}.${i % 255}")
         }
 
+        // Act
         repeat(NUMBER_COROUTINES) { coroutineIndex ->
             addJobs.add(
                 launch(Dispatchers.Default) {
@@ -185,9 +209,29 @@ class NeighborsTests {
 
         updateRemoveJobs.joinAll()
 
+        // Assert
         val finalNeighbors = neighbors.getAll()
         val distinctNeighbors = finalNeighbors.distinctBy { it.inetAddress }
         assertEquals(finalNeighbors.size, distinctNeighbors.size)
+    }
+
+    @Test
+    fun `check if neighbour no longer exists after remove`() {
+        // Arrange
+        val inetAddress = InetAddress.getByName("192.168.0.1")
+        val neighbor = Neighbor(inetAddress)
+
+        // Act [1]
+        neighbors.add(neighbor)
+
+        // Assert [1]
+        assertEquals(neighbor, neighbors.get(inetAddress, null))
+
+        // Act [2]
+        neighbors.remove(neighbor)
+
+        // Assert [2]
+        assertNull(neighbors.get(inetAddress, null))
     }
 
     companion object {
