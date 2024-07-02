@@ -25,7 +25,7 @@ class DNSServiceDiscovery(
     private val serviceName: String,
     private val port: Int,
     private val neighbors: Neighbors,
-    private val lookupAgainTime: Long = DEFAULT_LOOKUP_AGAIN_TIME
+    private val lookupAgainTime: Long
 ) : ServiceDiscovery {
 
     // The node's own inet address (IP).
@@ -76,7 +76,5 @@ class DNSServiceDiscovery(
 
     private companion object {
         private val logger = LoggerFactory.getLogger(DNSServiceDiscovery::class.java)
-
-        private const val DEFAULT_LOOKUP_AGAIN_TIME = 3000L
     }
 }

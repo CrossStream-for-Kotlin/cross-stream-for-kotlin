@@ -52,7 +52,7 @@ import kotlin.time.Duration
 /**
  * Broker Independent.
  *
- * @property hostname The hostname.
+ * @property hostname The hostname or ip address.
  * @property serviceDiscoveryConfig Service Discovery configuration.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
@@ -189,9 +189,22 @@ class BrokerIndependent(
     private fun startServiceDiscovery(port: Int) =
         when (serviceDiscoveryConfig) {
             is DNSServiceDiscoveryConfig ->
-                DNSServiceDiscovery(hostname, serviceDiscoveryConfig.serviceName, COMMON_PORT, neighbors)
+                DNSServiceDiscovery(
+                    hostname,
+                    serviceDiscoveryConfig.serviceName,
+                    COMMON_PORT,
+                    neighbors,
+                    serviceDiscoveryConfig.periodicServiceDiscoveryUpdates
+                )
             is MulticastServiceDiscoveryConfig ->
-                MulticastServiceDiscovery(neighbors, selfIp, port)
+                MulticastServiceDiscovery(
+                    neighbors,
+                    selfIp,
+                    port,
+                    serviceDiscoveryConfig.multicastIp,
+                    serviceDiscoveryConfig.multicastPort,
+                    serviceDiscoveryConfig.periodicServiceDiscoveryUpdates
+                )
             else -> throw UnexpectedBrokerException()
         }
 

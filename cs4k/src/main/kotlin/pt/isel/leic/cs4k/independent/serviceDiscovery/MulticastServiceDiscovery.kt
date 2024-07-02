@@ -22,20 +22,24 @@ import java.net.NetworkInterface
  * @property neighbors The set of neighbors.
  * @property selfIp The node's own IP address.
  * @property port The port to announce.
+ * @param multicastIp The multicast ip.
+ * @param multicastPort The multicast port.
  * @property sendDatagramPacketAgainTime Amount of time, in milliseconds before send another multicast datagram packet.
  */
 class MulticastServiceDiscovery(
     private val neighbors: Neighbors,
     private val selfIp: String,
     private val port: Int,
-    private val sendDatagramPacketAgainTime: Long = DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME
+    multicastIp: String,
+    multicastPort: Int,
+    private val sendDatagramPacketAgainTime: Long
 ) : ServiceDiscovery {
 
     // Multicast inet address (IP).
-    private val multicastInetAddress = InetAddress.getByName(MULTICAST_IP)
+    private val multicastInetAddress = InetAddress.getByName(multicastIp)
 
     // Multicast socket address.
-    private val multicastInetSocketAddress = InetSocketAddress(multicastInetAddress, MULTICAST_RECEIVE_PORT)
+    private val multicastInetSocketAddress = InetSocketAddress(multicastInetAddress, multicastPort)
 
     // Buffer that stores the content of received multicast datagram packets.
     private val inboundBuffer = ByteArray(INBOUND_BUFFER_SIZE)
@@ -46,7 +50,7 @@ class MulticastServiceDiscovery(
     // Thread to listen for multicast datagram packet.
     private val listenMulticastSocketThread = Thread {
         retryExecutor.execute({ BrokerException.UnexpectedBrokerException() }, {
-            val multicastSocket = MulticastSocket(MULTICAST_RECEIVE_PORT)
+            val multicastSocket = MulticastSocket(multicastPort)
             val networkInterface = getActiveMulticastNetworkInterface()
             joinMulticastGroup(multicastSocket, networkInterface)
             listenMulticastSocket(multicastSocket, networkInterface)
@@ -56,7 +60,8 @@ class MulticastServiceDiscovery(
     // Thread to periodic announce existence to neighbors.
     private val periodicAnnounceExistenceToNeighborsThread = Thread {
         retryExecutor.execute({ BrokerException.UnexpectedBrokerException() }, {
-            val multicastSocket = MulticastSocket(MULTICAST_SEND_PORT)
+            val port = getPort()
+            val multicastSocket = MulticastSocket(port)
             periodicAnnounceExistenceToNeighbors(multicastSocket)
         })
     }
@@ -185,12 +190,15 @@ class MulticastServiceDiscovery(
     private companion object {
         private val logger = LoggerFactory.getLogger(MulticastServiceDiscovery::class.java)
 
-        private const val MULTICAST_IP = "228.5.6.7"
-        private const val MULTICAST_RECEIVE_PORT = 6789
-        private const val MULTICAST_SEND_PORT = 6790
         private const val INBOUND_BUFFER_SIZE = 1024
         private const val TIME_TO_LIVE = 10
-        private const val DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME = 3000L
         private const val LOOP_BACK_IP = "127.0.0.1"
+        private const val FIRST_AVAILABLE_PORT = 6700
+        private const val LAST_AVAILABLE_PORT = 6900
+
+        /**
+         * Get a port number to announce existence to neighbours.
+         */
+        private fun getPort() = (FIRST_AVAILABLE_PORT..LAST_AVAILABLE_PORT).random()
     }
 }
