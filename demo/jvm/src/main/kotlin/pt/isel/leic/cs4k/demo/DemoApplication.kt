@@ -47,7 +47,7 @@ class DemoApplication {
 
             4.1F -> BrokerIndependent(
                 Environment.getHostname(),
-                MulticastServiceDiscoveryConfig,
+                MulticastServiceDiscoveryConfig(),
                 identifier = node,
                 enableLogging = true
             )

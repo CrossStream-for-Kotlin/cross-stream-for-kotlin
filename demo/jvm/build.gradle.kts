@@ -32,13 +32,14 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webflux")
 
     // For CS4K Library.
-    implementation("pt.isel.leic.cs4k:cs4k:0.2.1")
+    implementation("pt.isel.leic.cs4k:cs4k:0.2.2")
 }
 
 tasks.test {
