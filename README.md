@@ -19,6 +19,10 @@ Library to support the use of Server-sent events and WebSockets on multi-node en
   * [Option 2 - Using Redis](#option-2---using-redis)
     * [Redis Cluster](#redis-cluster)
     * [Redis Single Node](#redis-single-node)
+  * [Option 3 - Using RabbitMQ](#option-3---using-rabbitmq)
+    * [RabbitMQ Cluster](#rabbitmq-cluster)
+    * [RabbitMQ Single Node](#rabbitmq-single-node)
+  * [Option 4 - Without External System](#option-4---without-external-system)
 
 ---
 

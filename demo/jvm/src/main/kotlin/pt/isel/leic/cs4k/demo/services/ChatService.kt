@@ -9,7 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import pt.isel.leic.cs4k.Broker
-import pt.isel.leic.cs4k.FlowBrokerAdapter
+import pt.isel.leic.cs4k.adapter.FlowBrokerAdapter
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.demo.domain.Message
 import pt.isel.leic.cs4k.demo.domain.MessageQueue

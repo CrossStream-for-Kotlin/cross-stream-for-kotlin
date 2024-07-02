@@ -16,7 +16,6 @@ class MulticastServiceDiscoveryConfigTests {
             MulticastServiceDiscoveryConfig(multicastIp = "224.0.0.1")
             MulticastServiceDiscoveryConfig(multicastIp = "225.4.5.6")
             MulticastServiceDiscoveryConfig(multicastIp = "239.255.255.255")
-
         }
     }
 
