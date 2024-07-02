@@ -1,13 +1,15 @@
 package pt.isel.leic.cs4k.independent
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.Broker.Companion.SYSTEM_TOPIC
@@ -22,14 +24,12 @@ import pt.isel.leic.cs4k.common.BrokerThreadType
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
-import pt.isel.leic.cs4k.common.SubscriberWithEventTracking
 import pt.isel.leic.cs4k.independent.messaging.LineReader
 import pt.isel.leic.cs4k.independent.messaging.MessageQueue
 import pt.isel.leic.cs4k.independent.network.ConnectionState.CONNECTED
 import pt.isel.leic.cs4k.independent.network.ConnectionState.DISCONNECTED
 import pt.isel.leic.cs4k.independent.network.ConnectionState.ZOMBIE
 import pt.isel.leic.cs4k.independent.network.InboundConnection
-import pt.isel.leic.cs4k.independent.network.Neighbor
 import pt.isel.leic.cs4k.independent.network.Neighbors
 import pt.isel.leic.cs4k.independent.network.OutboundConnection
 import pt.isel.leic.cs4k.independent.network.acceptSuspend
@@ -41,14 +41,11 @@ import pt.isel.leic.cs4k.independent.serviceDiscovery.MulticastServiceDiscovery
 import pt.isel.leic.cs4k.independent.serviceDiscovery.config.DNSServiceDiscoveryConfig
 import pt.isel.leic.cs4k.independent.serviceDiscovery.config.MulticastServiceDiscoveryConfig
 import pt.isel.leic.cs4k.independent.serviceDiscovery.config.ServiceDiscoveryConfig
-import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.net.SocketException
 import java.nio.channels.AsynchronousServerSocketChannel
 import java.nio.channels.AsynchronousSocketChannel
 import java.util.UUID
-import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 import kotlin.time.Duration
 
@@ -57,7 +54,6 @@ import kotlin.time.Duration
  *
  * @property hostname The hostname.
  * @property serviceDiscoveryConfig Service Discovery configuration.
- * @property preventConsecutiveDuplicateEvents Prevent consecutive duplicate events.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  * @param brokerThreadType The type of thread used for listening for events and connecting
@@ -66,7 +62,6 @@ import kotlin.time.Duration
 class BrokerIndependent(
     private val hostname: String,
     private val serviceDiscoveryConfig: ServiceDiscoveryConfig,
-    private val preventConsecutiveDuplicateEvents: Boolean = false,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false,
     brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
@@ -97,7 +92,7 @@ class BrokerIndependent(
     private val brokerThread: Thread
 
     // Scope for launch coroutines.
-    private lateinit var scope: CoroutineScope
+    private var scope: CoroutineScope? = null
 
     init {
         brokerThread = if (brokerThreadType == BrokerThreadType.REGULAR) {
@@ -115,24 +110,32 @@ class BrokerIndependent(
      * Does the initial steps to start up.
      */
     private fun setup() {
-        runBlocking {
-            supervisorScope {
-                scope = this
-                val boundServerSocketChannelToAcceptConnectionJob = this.launch(readCoroutineDispatcher) {
-                    boundServerSocketChannelToAcceptConnection(this)
-                }
-                val periodicConnectToNeighboursJob = this.launch(writeCoroutineDispatcher) {
-                    periodicConnectToNeighbours(this)
-                }
-                val processEventsJob = this.launch(writeCoroutineDispatcher) {
-                    processEvents()
-                }
+        try {
+            runBlocking {
+                supervisorScope {
+                    scope = this
+                    val boundServerSocketChannelToAcceptConnectionJob = this.launch {
+                        boundServerSocketChannelToAcceptConnection(this)
+                    }
+                    val periodicConnectToNeighboursJob = this.launch {
+                        periodicConnectToNeighbours(this)
+                    }
+                    val processEventsJob = this.launch {
+                        processEvents()
+                    }
 
-                joinAll(
-                    boundServerSocketChannelToAcceptConnectionJob,
-                    periodicConnectToNeighboursJob,
-                    processEventsJob
-                )
+                    joinAll(
+                        boundServerSocketChannelToAcceptConnectionJob,
+                        periodicConnectToNeighboursJob,
+                        processEventsJob
+                    )
+                }
+            }
+        } catch (ex: Exception) {
+            if (ex is CancellationException || ex is InterruptedException) {
+                return
+            } else {
+                throw ex
             }
         }
     }
@@ -147,13 +150,9 @@ class BrokerIndependent(
     private suspend fun boundServerSocketChannelToAcceptConnection(scope: CoroutineScope) {
         retryExecutor.suspendExecute({ UnexpectedBrokerException() }, {
             AsynchronousServerSocketChannel.open().use { serverSocketChannel ->
-                val port = if (serviceDiscoveryConfig is MulticastServiceDiscoveryConfig) {
-                    getRandomPort()
-                } else {
-                    COMMON_PORT
-                }
-                val serviceDiscovery = startServiceDiscovery(port)
+                val port = getPort(serviceDiscoveryConfig)
                 listeningPort = port
+                val serviceDiscovery = startServiceDiscovery(port)
 
                 try {
                     val inetSocketAddress = InetSocketAddress(selfIp, port)
@@ -164,13 +163,18 @@ class BrokerIndependent(
 
                     while (true) {
                         val socketChannel = serverSocketChannel.acceptSuspend()
-                        scope.launch(readCoroutineDispatcher) {
+                        scope.launch {
                             processNeighbourInboundConnection(socketChannel)
                         }
                     }
                 } catch (ex: Exception) {
                     serviceDiscovery.stop()
-                    throw ex
+                    if (ex is CancellationException || ex is InterruptedException) {
+                        logger.info("[{}:{}] server socket closed", selfIp, port)
+                        return@suspendExecute
+                    } else {
+                        throw ex
+                    }
                 }
             }
         })
@@ -211,20 +215,19 @@ class BrokerIndependent(
      * @param inboundConnection The inbound connection.
      */
     private suspend fun listenSocketChannel(inetAddress: InetAddress, inboundConnection: InboundConnection) {
-        while (true) {
-            try {
-                // ... read the socket channel.
-                val lineReader = LineReader { inboundConnection.socketChannel.readSuspend(it) }
+        try {
+            val lineReader = LineReader { inboundConnection.socketChannel.readSuspend(it) }
+            while (true) {
                 lineReader.readLine()?.let { line ->
                     logger.info("[{}:{}] <- '{}' <- [{}]", selfIp, listeningPort, line, inetAddress.hostAddress)
                     val event = BrokerSerializer.deserializeEventFromJson(line)
                     deliverToSubscribers(event)
                 }
-            } catch (ex: Exception) {
-                logger.info("[{}:{}] <-X- [{}]", selfIp, listeningPort, inetAddress.hostAddress)
-                neighbors.updateInboundConnection(inetAddress, null)
-                break
             }
+        } catch (ex: Exception) {
+            logger.info("[{}:{}] <-X- [{}]", selfIp, listeningPort, inetAddress.hostAddress)
+            withContext(Dispatchers.IO) { inboundConnection.socketChannel.close() }
+            neighbors.updateInboundConnection(inetAddress, null)
         }
     }
 
@@ -237,29 +240,31 @@ class BrokerIndependent(
      */
     private suspend fun periodicConnectToNeighbours(scope: CoroutineScope) {
         while (true) {
-            neighbors
-                .getAll()
-                .forEach { neighbor ->
-                    if (!neighbor.isOutboundConnectionActive && neighbor.port != null) {
-                        val inetSocketAddress = InetSocketAddress(neighbor.inetAddress, neighbor.port)
-                        try {
-                            val outboundSocketChannel = AsynchronousSocketChannel.open()
-                            outboundSocketChannel.connectSuspend(inetSocketAddress)
-                            val updatedNeighbour = neighbor.copy(
-                                outboundConnection = OutboundConnection(
-                                    state = CONNECTED,
-                                    inetSocketAddress = inetSocketAddress,
-                                    socketChannel = outboundSocketChannel
+            try {
+                neighbors
+                    .getAll()
+                    .forEach { neighbor ->
+                        if (!neighbor.isOutboundConnectionActive && neighbor.port != null) {
+                            val inetSocketAddress = InetSocketAddress(neighbor.inetAddress, neighbor.port)
+                            try {
+                                val outboundSocketChannel = AsynchronousSocketChannel.open()
+                                outboundSocketChannel.connectSuspend(inetSocketAddress)
+                                neighbors.update(
+                                    neighbor.copy(
+                                        outboundConnection = OutboundConnection(
+                                            state = CONNECTED,
+                                            inetSocketAddress = inetSocketAddress,
+                                            socketChannel = outboundSocketChannel
+                                        )
+                                    )
                                 )
-                            )
-                            neighbors.update(updatedNeighbour)
-                            scope.launch {
-                                writeToOutboundConnection(updatedNeighbour)
-                            }
+                                scope.launch {
+                                    writeToOutboundConnection(neighbor.inetAddress, neighbor.port)
+                                }
 
-                            logger.info("[{}:{}] -> [{}:{}]", selfIp, listeningPort, neighbor.inetAddress, neighbor.port)
-                        } catch (ex: Exception) {
-                            if (ex is ConnectException || ex is SocketException) {
+                                logger.info("[{}:{}] -> [{}:{}]", selfIp, listeningPort, neighbor.inetAddress, neighbor.port)
+                            } catch (ex: Exception) {
+                                logger.info("[{}:{}] -X-> [{}:{}]", selfIp, listeningPort, neighbor.inetAddress, neighbor.port)
                                 if (neighbor.outboundConnection?.reachMaximumNumberOfConnectionAttempts == true) {
                                     neighbors.remove(neighbor)
                                 } else {
@@ -277,14 +282,14 @@ class BrokerIndependent(
                                         )
                                     )
                                 }
-                                logger.info("[{}:{}] -X-> [{}:{}]", selfIp, listeningPort, neighbor.inetAddress, neighbor.port)
-                            } else {
-                                throw ex
                             }
                         }
                     }
-                }
-            delay(DEFAULT_WAIT_TIME_TO_REFRESH_NEIGHBOURS_AGAIN)
+                delay(DEFAULT_WAIT_TIME_TO_REFRESH_NEIGHBOURS_AGAIN)
+            } catch (ex: Exception) {
+                logger.info("[{}:{}] stop periodic connect to neighbours", selfIp, listeningPort)
+                break
+            }
         }
     }
 
@@ -307,67 +312,45 @@ class BrokerIndependent(
      * Deliver event to subscribers, i.e., call all subscriber handlers of the event topic.
      */
     private fun deliverToSubscribers(event: Event) {
-        val associatedSubscribers = if (preventConsecutiveDuplicateEvents) {
-            associatedSubscribers.getAndUpdateAll(event.topic, event.id)
-        } else {
-            associatedSubscribers.getAll(event.topic)
-        }
-        associatedSubscribers.forEach { subscriber -> subscriber.handler(event) }
+        associatedSubscribers
+            .getAll(event.topic)
+            .forEach { subscriber -> subscriber.handler(event) }
     }
-
-    /**
-     * Create a subscriber.
-     *
-     * @param id The identifier of a subscriber.
-     * @param handler The handler to be called when there is a new event.
-     * @return The subscriber created.
-     */
-    private fun createSubscriber(id: UUID, handler: (event: Event) -> Unit) =
-        if (preventConsecutiveDuplicateEvents) {
-            SubscriberWithEventTracking(id, handler)
-        } else {
-            Subscriber(id, handler)
-        }
 
     /**
      * Write to neighbour outbound connection.
      *
-     * @param neighbor The neighbour of outbound connection.
+     * @param inetAddress The neighbour inetAddress.
+     * @param port The neighbour port number.
      */
-    private suspend fun writeToOutboundConnection(neighbor: Neighbor) {
+    private suspend fun writeToOutboundConnection(inetAddress: InetAddress, port: Int) {
         while (true) {
-            val event = neighbor.eventQueue.dequeue(Duration.INFINITE)
-            if (neighbor.isOutboundConnectionActive) {
-                val outboundConnection = requireNotNull(neighbor.outboundConnection)
-                val socketChannel = requireNotNull(outboundConnection.socketChannel)
-                val eventJson = BrokerSerializer.serializeEventToJson(event)
-                try {
-                    // ... try to write the event to the socket channel.
-                    socketChannel.writeSuspend(eventJson)
-                    logger.info("[{}:{}] -> '{}' -> [{}:{}]", selfIp, listeningPort, eventJson, neighbor.inetAddress, neighbor.port)
-                } catch (ex: Exception) {
-                    neighbors.update(
-                        neighbor.copy(
-                            outboundConnection = outboundConnection.copy(
-                                state = DISCONNECTED,
-                                socketChannel = null
+            neighbors.get(inetAddress, port)?.let { neighbor ->
+                val event = neighbor.eventQueue.dequeue(Duration.INFINITE)
+                if (neighbor.isOutboundConnectionActive) {
+                    val outboundConnection = requireNotNull(neighbor.outboundConnection)
+                    val socketChannel = requireNotNull(outboundConnection.socketChannel)
+                    val eventJson = BrokerSerializer.serializeEventToJson(event)
+                    try {
+                        socketChannel.writeSuspend(eventJson)
+                        logger.info("[{}:{}] -> '{}' -> [{}:{}]", selfIp, listeningPort, eventJson, neighbor.inetAddress, neighbor.port)
+                    } catch (ex: Exception) {
+                        logger.info("[{}:{}] -> '{}' -X-> [{}:{}]", selfIp, listeningPort, eventJson, neighbor.inetAddress, neighbor.port)
+                        withContext(Dispatchers.IO) { socketChannel.close() }
+                        neighbors.update(
+                            neighbor.copy(
+                                outboundConnection = outboundConnection.copy(
+                                    state = DISCONNECTED,
+                                    socketChannel = null
+                                )
                             )
                         )
-                    )
+                        neighbor.eventQueue.enqueue(event)
+                    }
+                } else {
                     neighbor.eventQueue.enqueue(event)
-                    logger.info("[{}:{}] -> '{}' -X-> [{}:{}]", selfIp, listeningPort, eventJson, neighbor.inetAddress, neighbor.port)
                 }
-            } else {
-                neighbors.update(
-                    neighbor.copy(
-                        outboundConnection = neighbor.outboundConnection?.copy(
-                            state = DISCONNECTED,
-                            socketChannel = null
-                        )
-                    )
-                )
-                neighbor.eventQueue.enqueue(event)
-            }
+            } ?: break
         }
     }
 
@@ -376,7 +359,7 @@ class BrokerIndependent(
             throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
         }
 
-        val subscriber = createSubscriber(UUID.randomUUID(), handler)
+        val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
 
         logAndNotifySystemTopic("new subscriber topic '$topic' id '${subscriber.id}'")
@@ -406,8 +389,11 @@ class BrokerIndependent(
         }
 
         isShutdown = true
-        scope.cancel()
-        closeCoroutineDispatchers()
+        scope?.cancel()
+        neighbors.getAll().forEach {
+            it.outboundConnection?.socketChannel?.close()
+            it.inboundConnection?.socketChannel?.close()
+        }
         brokerThread.interrupt()
         brokerThread.join()
     }
@@ -442,32 +428,23 @@ class BrokerIndependent(
         // Logger instance for logging Broker class information.
         private val logger = LoggerFactory.getLogger(BrokerIndependent::class.java)
 
-        // Coroutine dispatcher for read operations.
-        private val readCoroutineDispatcher =
-            Executors.newFixedThreadPool(2).asCoroutineDispatcher()
-
-        // Coroutine dispatcher for write operations.
-        private val writeCoroutineDispatcher =
-            Executors.newFixedThreadPool(2).asCoroutineDispatcher()
-
         private const val COMMON_PORT = 6790
         private const val FIRST_AVAILABLE_PORT = 6700
         private const val LAST_AVAILABLE_PORT = 6900
-        private const val EVENTS_TO_PROCESS_CAPACITY = 5000
+        private const val EVENTS_TO_PROCESS_CAPACITY = 1_000_000
         private const val DEFAULT_WAIT_TIME_TO_REFRESH_NEIGHBOURS_AGAIN = 2000L
         private const val IGNORE_EVENT_ID = -1L
 
         /**
-         * Close coroutine dispatchers in use.
+         * Get a port number to bound server socket channel.
+         *
+         * @param serviceDiscoveryConfig The service discovery configuration.
          */
-        private fun closeCoroutineDispatchers() {
-            readCoroutineDispatcher.close()
-            writeCoroutineDispatcher.close()
-        }
-
-        /**
-         * Get a random port between [FIRST_AVAILABLE_PORT] and [LAST_AVAILABLE_PORT].
-         */
-        private fun getRandomPort() = (FIRST_AVAILABLE_PORT..LAST_AVAILABLE_PORT).random()
+        private fun getPort(serviceDiscoveryConfig: ServiceDiscoveryConfig) =
+            if (serviceDiscoveryConfig is MulticastServiceDiscoveryConfig) {
+                (FIRST_AVAILABLE_PORT..LAST_AVAILABLE_PORT).random()
+            } else {
+                COMMON_PORT
+            }
     }
 }

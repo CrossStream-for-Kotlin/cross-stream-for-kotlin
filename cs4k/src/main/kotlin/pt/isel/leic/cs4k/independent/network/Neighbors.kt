@@ -25,6 +25,17 @@ class Neighbors {
     }
 
     /**
+     * Get a neighbor.
+     *
+     * @param inetAddress The neighbour inetAddress.
+     * @param port The neighbour port number.
+     * @return The neighbor if exists.
+     */
+    fun get(inetAddress: InetAddress, port: Int?) = lock.withLock {
+        set.find { it.inetAddress == inetAddress && it.port == port }
+    }
+
+    /**
      * Add a neighbor if it doesn't exist yet.
      *
      * @param neighbor The neighbor to add.
@@ -77,15 +88,27 @@ class Neighbors {
     }
 
     /**
-     * Update a neighbor. If it doesn't exist, it is still added.
+     * Update a neighbor.
      *
      * @param neighbor The updated neighbour.
      */
-    fun update(neighbor: Neighbor) =
+    fun update(neighbor: Neighbor) {
         lock.withLock {
+            if (noLongerNeighbor(neighbor)) return@withLock
             remove(neighbor)
             add(neighbor)
         }
+    }
+
+    /**
+     * Check if the neighbor is no longer a neighbor.
+     *
+     * @param neighbor The neighbour to check.
+     * @return True if the neighbor is no longer a neighbor.
+     */
+    private fun noLongerNeighbor(neighbor: Neighbor) = lock.withLock {
+        set.none { it.inetAddress == neighbor.inetAddress && it.port == neighbor.port }
+    }
 
     companion object {
         const val LOOP_BACK_IP = "127.0.0.1"

@@ -25,6 +25,6 @@ data class Neighbor(
         get() = outboundConnection?.state == ConnectionState.CONNECTED
 
     private companion object {
-        private const val EVENTS_TO_PROCESS_CAPACITY = 5000
+        private const val EVENTS_TO_PROCESS_CAPACITY = 1_000_000
     }
 }

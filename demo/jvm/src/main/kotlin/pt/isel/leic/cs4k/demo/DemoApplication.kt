@@ -55,7 +55,6 @@ class DemoApplication {
             4.2F -> BrokerIndependent(
                 Environment.getHostname(),
                 DNSServiceDiscoveryConfig(Environment.getServiceName()),
-                /* preventConsecutiveDuplicateEvents = true, */
                 identifier = node,
                 enableLogging = true
             )
