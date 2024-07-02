@@ -288,7 +288,7 @@ class BrokerRabbit(
 - `clusterNodes` - The list of [RabbitNode](#rabbitnode).
 - `username` - The username used as credentials for RabbitMQ.
 - `password` - The password used as credentials for RabbitMQ.
-- `subscribeDelayInMillis` - 
+- `subscribeDelayInMillis` - Duration of time, in milliseconds, that the broker will wait for history shared by other brokers, resulting in a delay between invocation and return.
 - `identifier` - Identifier of instance/node used in logs.
 - `enableLogging` - Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
 
@@ -310,7 +310,7 @@ class BrokerRabbit {
 - `node` - The [RabbitNode](#rabbitnode).
 - `username` - The username used as credentials for RabbitMQ.
 - `password` - The password used as credentials for RabbitMQ.
-- `subscribeDelayInMillis` -
+- `subscribeDelayInMillis` - Duration of time, in milliseconds, that the broker will wait for history shared by other brokers, resulting in a delay between invocation and return.
 - `identifier` - Identifier of instance/node used in logs.
 - `enableLogging` - Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
 
