@@ -33,6 +33,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * @param clusterNodes The list of Rabbit nodes.
  * @param username The username used as credentials for RabbitMQ.
  * @param password The password used as credentials for RabbitMQ.
+ * @param subscribeDelayInMillis Duration of time, in milliseconds, that the broker will wait for history
+ * shared by other brokers, resulting in a delay between invocation and return.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
  */
@@ -51,6 +53,8 @@ class BrokerRabbit(
      * @param node The rabbit node.
      * @param username The username used as credentials for RabbitMQ.
      * @param password The password used as credentials for RabbitMQ.
+     * @param subscribeDelayInMillis Duration of time, in milliseconds, that the broker will wait for history
+     * shared by other brokers, resulting in a delay between invocation and return.
      * @property identifier Identifier of instance/node used in logs.
      * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
      */
