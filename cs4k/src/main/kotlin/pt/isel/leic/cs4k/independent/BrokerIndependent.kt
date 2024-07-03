@@ -20,7 +20,6 @@ import pt.isel.leic.cs4k.common.BrokerException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.BrokerSerializer
-import pt.isel.leic.cs4k.common.BrokerThreadType
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
@@ -46,7 +45,6 @@ import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousServerSocketChannel
 import java.nio.channels.AsynchronousSocketChannel
 import java.util.UUID
-import kotlin.concurrent.thread
 import kotlin.time.Duration
 
 /**

@@ -16,7 +16,6 @@ import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.BrokerException.UnauthorizedTopicException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.BrokerSerializer
-import pt.isel.leic.cs4k.common.BrokerThreadType
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
@@ -27,7 +26,6 @@ import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.UnListen
 import java.sql.Connection
 import java.sql.SQLException
 import java.util.*
-import kotlin.concurrent.thread
 
 /**
  * Broker PostgreSQL.
