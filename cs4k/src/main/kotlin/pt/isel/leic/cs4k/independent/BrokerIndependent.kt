@@ -56,15 +56,14 @@ import kotlin.time.Duration
  * @property serviceDiscoveryConfig Service Discovery configuration.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
- * @param brokerThreadType The type of thread used for listening for events and connecting
- * to neighbors.
+ * @property threadBuilder Responsible for creating threads.
  */
 class BrokerIndependent(
     private val hostname: String,
     private val serviceDiscoveryConfig: ServiceDiscoveryConfig,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false,
-    brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
+    private val threadBuilder: Thread.Builder = Thread.ofVirtual()
 ) : Broker {
 
     // Shutdown state.
@@ -95,14 +94,9 @@ class BrokerIndependent(
     private var scope: CoroutineScope? = null
 
     init {
-        brokerThread = if (brokerThreadType == BrokerThreadType.REGULAR) {
-            thread {
-                setup()
-            }
-        } else {
-            Thread.startVirtualThread {
-                setup()
-            }
+        // Creating a thread from the builder and executing setup.
+        brokerThread = threadBuilder.start {
+            setup()
         }
     }
 

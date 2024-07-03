@@ -37,7 +37,7 @@ import kotlin.concurrent.thread
  * @property dbConnectionPoolSize The maximum size that the JDBC connection pool is allowed to reach.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
- * @param brokerThreadType The type of thread used for listening for events.
+ * @property threadBuilder Responsible for creating threads.
  */
 class BrokerPostgreSQL(
     private val postgreSQLDbUrl: String,
@@ -45,7 +45,7 @@ class BrokerPostgreSQL(
     private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false,
-    brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
+    private val threadBuilder: Thread.Builder = Thread.ofVirtual()
 ) : Broker {
 
     init {
@@ -82,15 +82,9 @@ class BrokerPostgreSQL(
         // Create the events table if it does not exist.
         createEventsTable()
 
-        // Start a new thread to start setup.
-        listeningThread = if (brokerThreadType == BrokerThreadType.REGULAR) {
-            thread {
-                setup()
-            }
-        } else {
-            Thread.startVirtualThread {
-                setup()
-            }
+        // Creating a thread from the builder and executing setup.
+        listeningThread = threadBuilder.start {
+            setup()
         }
     }
 
