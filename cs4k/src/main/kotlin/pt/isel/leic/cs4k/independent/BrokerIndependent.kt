@@ -186,7 +186,8 @@ class BrokerIndependent(
                     serviceDiscoveryConfig.serviceName,
                     COMMON_PORT,
                     neighbors,
-                    serviceDiscoveryConfig.periodicServiceDiscoveryUpdates
+                    serviceDiscoveryConfig.periodicServiceDiscoveryUpdates,
+                    threadBuilder
                 )
             is MulticastServiceDiscoveryConfig ->
                 MulticastServiceDiscovery(
@@ -195,7 +196,8 @@ class BrokerIndependent(
                     port,
                     serviceDiscoveryConfig.multicastIp,
                     serviceDiscoveryConfig.multicastPort,
-                    serviceDiscoveryConfig.periodicServiceDiscoveryUpdates
+                    serviceDiscoveryConfig.periodicServiceDiscoveryUpdates,
+                    threadBuilder
                 )
             else -> throw UnexpectedBrokerException()
         }

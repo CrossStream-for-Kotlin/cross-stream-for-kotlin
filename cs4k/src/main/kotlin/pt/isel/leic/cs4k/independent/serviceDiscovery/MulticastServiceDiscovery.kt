@@ -25,6 +25,7 @@ import java.net.NetworkInterface
  * @param multicastIp The multicast ip.
  * @param multicastPort The multicast port.
  * @property sendDatagramPacketAgainTime Amount of time, in milliseconds before send another multicast datagram packet.
+ * @param threadBuilder Creator of threads used for sending multicast packets and listening for neighbors..
  */
 class MulticastServiceDiscovery(
     private val neighbors: Neighbors,
@@ -32,7 +33,8 @@ class MulticastServiceDiscovery(
     private val port: Int,
     multicastIp: String,
     multicastPort: Int,
-    private val sendDatagramPacketAgainTime: Long
+    private val sendDatagramPacketAgainTime: Long,
+    threadBuilder: Thread.Builder
 ) : ServiceDiscovery {
 
     // Multicast inet address (IP).
@@ -48,7 +50,7 @@ class MulticastServiceDiscovery(
     private val retryExecutor = RetryExecutor()
 
     // Thread to listen for multicast datagram packet.
-    private val listenMulticastSocketThread = Thread {
+    private val listenMulticastSocketThread = threadBuilder.start {
         retryExecutor.execute({ BrokerException.UnexpectedBrokerException() }, {
             val multicastSocket = MulticastSocket(multicastPort)
             val networkInterface = getActiveMulticastNetworkInterface()
@@ -58,7 +60,7 @@ class MulticastServiceDiscovery(
     }
 
     // Thread to periodic announce existence to neighbors.
-    private val periodicAnnounceExistenceToNeighborsThread = Thread {
+    private val periodicAnnounceExistenceToNeighborsThread = threadBuilder.start {
         retryExecutor.execute({ BrokerException.UnexpectedBrokerException() }, {
             val port = getPort()
             val multicastSocket = MulticastSocket(port)
