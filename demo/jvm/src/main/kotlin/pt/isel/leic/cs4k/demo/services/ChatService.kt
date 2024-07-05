@@ -9,7 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import pt.isel.leic.cs4k.Broker
-import pt.isel.leic.cs4k.FlowBrokerAdapter
+import pt.isel.leic.cs4k.adapter.subscribeToFlow
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.demo.domain.Message
 import pt.isel.leic.cs4k.demo.domain.MessageQueue
@@ -28,7 +28,7 @@ class ChatService(val broker: Broker) {
 
     private val sseEmittersToKeepAlive = mutableListOf<SseEmitter>()
     private val lock = ReentrantLock()
-    private val flowBrokerAdapter = FlowBrokerAdapter(broker)
+
     private val mutableListFlow = MessageQueue<Pair<Flow<Event>, (Event) -> Unit>>(1000)
     private val th: Thread = Thread {
         runBlocking {
@@ -103,7 +103,7 @@ class ChatService(val broker: Broker) {
         val sseEmitter = SseEmitter(TimeUnit.MINUTES.toMillis(30))
         lock.withLock { sseEmittersToKeepAlive.add(sseEmitter) }
 
-        val flow = flowBrokerAdapter.subscribeToFlow(group ?: generalGroup)
+        val flow = broker.subscribeToFlow(group ?: generalGroup)
         runBlocking {
             mutableListFlow.enqueue(
                 flow to { event ->
