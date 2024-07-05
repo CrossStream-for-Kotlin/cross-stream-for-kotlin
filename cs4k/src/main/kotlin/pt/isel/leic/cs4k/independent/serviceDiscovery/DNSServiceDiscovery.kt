@@ -37,7 +37,7 @@ class DNSServiceDiscovery(
     private val retryExecutor = RetryExecutor()
 
     // Thread responsible for making periodic DNS queries.
-    private val dnsLookupThread = threadBuilder.start {
+    private val dnsLookupThread = threadBuilder.unstarted {
         retryExecutor.execute({ UnexpectedBrokerException() }, {
             try {
                 while (true) {
