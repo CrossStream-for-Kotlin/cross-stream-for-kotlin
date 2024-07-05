@@ -36,6 +36,9 @@ class DNSServiceDiscovery(
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
+    // Retry condition.
+    private val retryCondition = { e: Throwable -> e !is InterruptedException }
+
     // Thread responsible for making periodic DNS queries.
     private val dnsLookupThread = threadBuilder.unstarted {
         retryExecutor.execute({ UnexpectedBrokerException() }, {
@@ -52,7 +55,7 @@ class DNSServiceDiscovery(
                     throw ex
                 }
             }
-        })
+        }, retryCondition)
     }
 
     /**

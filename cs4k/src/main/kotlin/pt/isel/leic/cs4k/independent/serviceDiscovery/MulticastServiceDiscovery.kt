@@ -49,6 +49,9 @@ class MulticastServiceDiscovery(
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
+    // Retry condition.
+    private val retryCondition = { e: Throwable -> e !is InterruptedException }
+
     // Thread to listen for multicast datagram packet.
     private val listenMulticastSocketThread = threadBuilder.unstarted {
         retryExecutor.execute({ BrokerException.UnexpectedBrokerException() }, {
@@ -56,7 +59,7 @@ class MulticastServiceDiscovery(
             val networkInterface = getActiveMulticastNetworkInterface()
             joinMulticastGroup(multicastSocket, networkInterface)
             listenMulticastSocket(multicastSocket, networkInterface)
-        })
+        }, retryCondition)
     }
 
     // Thread to periodic announce existence to neighbors.
@@ -65,7 +68,7 @@ class MulticastServiceDiscovery(
             val port = getPort()
             val multicastSocket = MulticastSocket(port)
             periodicAnnounceExistenceToNeighbors(multicastSocket)
-        })
+        }, retryCondition)
     }
 
     /**
