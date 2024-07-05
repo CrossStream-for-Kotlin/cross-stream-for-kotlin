@@ -27,6 +27,8 @@ class BrokerIndependentTests {
         Thread.sleep(2_000)
     }
 
+    // ---- simple tests ----
+
     @Test
     fun `1 subscriber in 1 topic waiting for 1 message`() {
         // Arrange
@@ -300,6 +302,8 @@ class BrokerIndependentTests {
         assertTrue(reachedZero)
     }
 
+    // ---- stress tests ----
+
     @Test
     fun `stress test with simultaneous publication of n messages to 1 topic with several broker instances involved`() {
         // Arrange
@@ -424,10 +428,12 @@ class BrokerIndependentTests {
         unsubscribes.forEach { unsubscribe -> unsubscribe() }
     }
 
+    // ---- shutdown tests ----
+
     @Test
     fun `cannot invoke method shutdown twice`() {
         // Arrange
-        val broker = BrokerIndependent("127.0.0.1", MulticastServiceDiscoveryConfig)
+        val broker = BrokerIndependent("127.0.0.1", MulticastServiceDiscoveryConfig())
 
         Thread.sleep(5000)
 
@@ -443,7 +449,7 @@ class BrokerIndependentTests {
     @Test
     fun `cannot invoke method subscribe after shutdown`() {
         // Arrange
-        val broker = BrokerIndependent("127.0.0.1", MulticastServiceDiscoveryConfig)
+        val broker = BrokerIndependent("127.0.0.1", MulticastServiceDiscoveryConfig())
 
         Thread.sleep(5000)
 
@@ -459,7 +465,7 @@ class BrokerIndependentTests {
     @Test
     fun `cannot invoke method publish after shutdown`() {
         // Arrange
-        val broker = BrokerIndependent("127.0.0.1", MulticastServiceDiscoveryConfig)
+        val broker = BrokerIndependent("127.0.0.1", MulticastServiceDiscoveryConfig())
 
         Thread.sleep(5000)
 
@@ -483,7 +489,7 @@ class BrokerIndependentTests {
         private const val SUBSCRIBE_TIMEOUT_MILLIS = 120000L
 
         val brokerInstances = List(NUMBER_OF_BROKER_INSTANCES) {
-            BrokerIndependent("127.0.0.1", MulticastServiceDiscoveryConfig)
+            BrokerIndependent("127.0.0.1", MulticastServiceDiscoveryConfig())
         }
 
         private fun getRandomBrokerInstance() = brokerInstances.random()

@@ -20,7 +20,6 @@ import pt.isel.leic.cs4k.common.BrokerException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.BrokerException.UnexpectedBrokerException
 import pt.isel.leic.cs4k.common.BrokerSerializer
-import pt.isel.leic.cs4k.common.BrokerThreadType
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
@@ -46,25 +45,23 @@ import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousServerSocketChannel
 import java.nio.channels.AsynchronousSocketChannel
 import java.util.UUID
-import kotlin.concurrent.thread
 import kotlin.time.Duration
 
 /**
  * Broker Independent.
  *
- * @property hostname The hostname.
+ * @property hostname The hostname or ip address.
  * @property serviceDiscoveryConfig Service Discovery configuration.
  * @property identifier Identifier of instance/node used in logs.
  * @property enableLogging Logging mode to view logs with system topic [SYSTEM_TOPIC].
- * @param brokerThreadType The type of thread used for listening for events and connecting
- * to neighbors.
+ * @property threadBuilder Responsible for creating threads.
  */
 class BrokerIndependent(
     private val hostname: String,
     private val serviceDiscoveryConfig: ServiceDiscoveryConfig,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false,
-    brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
+    private val threadBuilder: Thread.Builder = Thread.ofVirtual()
 ) : Broker {
 
     // Shutdown state.
@@ -95,14 +92,9 @@ class BrokerIndependent(
     private var scope: CoroutineScope? = null
 
     init {
-        brokerThread = if (brokerThreadType == BrokerThreadType.REGULAR) {
-            thread {
-                setup()
-            }
-        } else {
-            Thread.startVirtualThread {
-                setup()
-            }
+        // Creating a thread from the builder and executing setup.
+        brokerThread = threadBuilder.start {
+            setup()
         }
     }
 
@@ -189,9 +181,24 @@ class BrokerIndependent(
     private fun startServiceDiscovery(port: Int) =
         when (serviceDiscoveryConfig) {
             is DNSServiceDiscoveryConfig ->
-                DNSServiceDiscovery(hostname, serviceDiscoveryConfig.serviceName, COMMON_PORT, neighbors)
+                DNSServiceDiscovery(
+                    hostname,
+                    serviceDiscoveryConfig.serviceName,
+                    COMMON_PORT,
+                    neighbors,
+                    serviceDiscoveryConfig.periodicServiceDiscoveryUpdates,
+                    threadBuilder
+                )
             is MulticastServiceDiscoveryConfig ->
-                MulticastServiceDiscovery(neighbors, selfIp, port)
+                MulticastServiceDiscovery(
+                    neighbors,
+                    selfIp,
+                    port,
+                    serviceDiscoveryConfig.multicastIp,
+                    serviceDiscoveryConfig.multicastPort,
+                    serviceDiscoveryConfig.periodicServiceDiscoveryUpdates,
+                    threadBuilder
+                )
             else -> throw UnexpectedBrokerException()
         }
 

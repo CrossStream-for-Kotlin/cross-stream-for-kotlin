@@ -19,13 +19,15 @@ import java.net.InetAddress
  * @property port The port number of neighbours.
  * @property neighbors The set of neighbors.
  * @property lookupAgainTime Amount of time, in milliseconds before another DNS query.
+ * @param threadBuilder Creator of threads used for looking up DNS.
  */
 class DNSServiceDiscovery(
     private val hostname: String,
     private val serviceName: String,
     private val port: Int,
     private val neighbors: Neighbors,
-    private val lookupAgainTime: Long = DEFAULT_LOOKUP_AGAIN_TIME
+    private val lookupAgainTime: Long,
+    threadBuilder: Thread.Builder
 ) : ServiceDiscovery {
 
     // The node's own inet address (IP).
@@ -34,8 +36,11 @@ class DNSServiceDiscovery(
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
+    // Retry condition.
+    private val retryCondition = { e: Throwable -> e !is InterruptedException }
+
     // Thread responsible for making periodic DNS queries.
-    private val dnsLookupThread = Thread {
+    private val dnsLookupThread = threadBuilder.unstarted {
         retryExecutor.execute({ UnexpectedBrokerException() }, {
             try {
                 while (true) {
@@ -50,7 +55,7 @@ class DNSServiceDiscovery(
                     throw ex
                 }
             }
-        })
+        }, retryCondition)
     }
 
     /**
@@ -76,7 +81,5 @@ class DNSServiceDiscovery(
 
     private companion object {
         private val logger = LoggerFactory.getLogger(DNSServiceDiscovery::class.java)
-
-        private const val DEFAULT_LOOKUP_AGAIN_TIME = 3000L
     }
 }

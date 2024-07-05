@@ -78,7 +78,9 @@ class RetryExecutor(
         logger.error("error executing action, message '{}'", exception.message)
         return if (retryCondition(exception)) {
             logger.error("... retrying ...")
-            Thread.sleep(waitTimeMillis)
+            if (!Thread.currentThread().isInterrupted) {
+                Thread.sleep(waitTimeMillis)
+            }
             true
         } else {
             logger.error("... not retrying ...")
