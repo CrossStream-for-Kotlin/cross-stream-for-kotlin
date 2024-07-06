@@ -1,5 +1,6 @@
-# cross-stream-for-kotlin
-Library to support the use of Server-sent events and WebSockets on multi-node environments
+![cs4k_logo](cs4k_logo.png)
+
+***Library to support the use of Server-sent events and WebSockets on multi-node backend systems***
 
 ---
 
@@ -206,7 +207,7 @@ class BrokerPostgreSQL(
     private val dbConnectionPoolSize: Int = Utils.DEFAULT_DB_CONNECTION_POOL_SIZE,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false,
-    brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
+    private val threadBuilder: Thread.Builder = Thread.ofVirtual()
 ) : Broker
 ```
 
@@ -215,7 +216,7 @@ class BrokerPostgreSQL(
 - `dbConnectionPoolSize` The maximum size that the JDBC connection pool is allowed to reach.
 - `identifier` Identifier of instance/node used in logs.
 - `enableLogging` Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
-- `brokerThreadType` The type of thread used for listening for events.
+- `brokerThreadType` Thread Builder responsible for creating threads.
 
 
 ---
@@ -340,7 +341,7 @@ class BrokerIndependent(
     private val serviceDiscoveryConfig: ServiceDiscoveryConfig,
     private val identifier: String = UNKNOWN_IDENTIFIER,
     private val enableLogging: Boolean = false,
-    brokerThreadType: BrokerThreadType = BrokerThreadType.VIRTUAL
+    private val threadBuilder: Thread.Builder = Thread.ofVirtual()
 ) : Broker
 ```
 
@@ -348,7 +349,7 @@ class BrokerIndependent(
 - `serviceDiscoveryConfig` - [ServiceDiscoverConfig](#servicediscoverconfig).
 - `identifier` - Identifier of instance/node used in logs.
 - `enableLogging` - Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
-- `brokerThreadType` - The type of thread used for listening for events and connecting to neighbors.
+- `brokerThreadType` Thread Builder responsible for creating threads.
 
 ### ServiceDiscoverConfig
 
