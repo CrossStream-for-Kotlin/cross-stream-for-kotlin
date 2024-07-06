@@ -19,7 +19,7 @@ class ChatController(
 
     @GetMapping(Uris.Chat.LISTEN)
     fun listen(request: HttpServletRequest, @RequestParam group: String?): SseEmitter =
-        chatService.newListenerFlow(
+        chatService.newListener(
             group = group,
             subscribedNode = request.getAttribute("node").toString()
         )
