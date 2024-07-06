@@ -1,9 +1,10 @@
-package pt.isel.leic.cs4k.independent
+package pt.isel.leic.cs4k
 
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeEach
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.Event
+import pt.isel.leic.cs4k.independent.BrokerIndependent
 import pt.isel.leic.cs4k.independent.serviceDiscovery.config.MulticastServiceDiscoveryConfig
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch

@@ -25,7 +25,7 @@ import java.net.NetworkInterface
  * @param multicastIp The multicast ip.
  * @param multicastPort The multicast port.
  * @property sendDatagramPacketAgainTime Amount of time, in milliseconds before send another multicast datagram packet.
- * @param threadBuilder Creator of threads used for sending multicast packets and listening for neighbors..
+ * @param threadBuilder Creator of threads used for sending multicast packets and listening for neighbors.
  */
 class MulticastServiceDiscovery(
     private val neighbors: Neighbors,

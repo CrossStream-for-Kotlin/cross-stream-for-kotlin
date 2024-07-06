@@ -3,6 +3,7 @@ package pt.isel.leic.cs4k.independent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
@@ -45,6 +46,7 @@ import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousServerSocketChannel
 import java.nio.channels.AsynchronousSocketChannel
 import java.util.UUID
+import java.util.concurrent.Executors
 import kotlin.time.Duration
 
 /**
@@ -85,18 +87,19 @@ class BrokerIndependent(
     // Retry executor.
     private val retryExecutor = RetryExecutor()
 
-    // Thread where coroutines will be created from.
-    private val brokerThread: Thread
+    // Executor coroutine dispatcher.
+    private val executorCoroutineDispatcher = Executors.newFixedThreadPool(
+        NUMBER_OF_EXECUTOR_THREADS,
+        threadBuilder.factory()
+    ).asCoroutineDispatcher()
+
+    // Creating a thread from the builder where coroutines will be created from.
+    private val brokerThread = threadBuilder.start {
+        setup()
+    }
 
     // Scope for launch coroutines.
     private var scope: CoroutineScope? = null
-
-    init {
-        // Creating a thread from the builder and executing setup.
-        brokerThread = threadBuilder.start {
-            setup()
-        }
-    }
 
     /**
      * Does the initial steps to start up.
@@ -106,13 +109,13 @@ class BrokerIndependent(
             runBlocking {
                 supervisorScope {
                     scope = this
-                    val boundServerSocketChannelToAcceptConnectionJob = this.launch {
+                    val boundServerSocketChannelToAcceptConnectionJob = this.launch(executorCoroutineDispatcher) {
                         boundServerSocketChannelToAcceptConnection(this)
                     }
-                    val periodicConnectToNeighboursJob = this.launch {
+                    val periodicConnectToNeighboursJob = this.launch(executorCoroutineDispatcher) {
                         periodicConnectToNeighbours(this)
                     }
-                    val processEventsJob = this.launch {
+                    val processEventsJob = this.launch(executorCoroutineDispatcher) {
                         processEvents()
                     }
 
@@ -155,7 +158,7 @@ class BrokerIndependent(
 
                     while (true) {
                         val socketChannel = serverSocketChannel.acceptSuspend()
-                        scope.launch {
+                        scope.launch(executorCoroutineDispatcher) {
                             processNeighbourInboundConnection(socketChannel)
                         }
                     }
@@ -265,7 +268,7 @@ class BrokerIndependent(
                                         )
                                     )
                                 )
-                                scope.launch {
+                                scope.launch(executorCoroutineDispatcher) {
                                     writeToOutboundConnection(neighbor.inetAddress, neighbor.port)
                                 }
 
@@ -435,6 +438,7 @@ class BrokerIndependent(
         // Logger instance for logging Broker class information.
         private val logger = LoggerFactory.getLogger(BrokerIndependent::class.java)
 
+        private const val NUMBER_OF_EXECUTOR_THREADS = 4
         private const val COMMON_PORT = 6790
         private const val FIRST_AVAILABLE_PORT = 6700
         private const val LAST_AVAILABLE_PORT = 6900

@@ -274,7 +274,7 @@ class BrokerTests {
         val topic = newRandomTopic()
         val message = newRandomMessage()
 
-        val latch = CountDownLatch(1)
+        val latch = CountDownLatch(NUMBER_OF_SUBSCRIBERS)
         val unsubscribes = mutableListOf<() -> Unit>()
 
         repeat(NUMBER_OF_SUBSCRIBERS) {
