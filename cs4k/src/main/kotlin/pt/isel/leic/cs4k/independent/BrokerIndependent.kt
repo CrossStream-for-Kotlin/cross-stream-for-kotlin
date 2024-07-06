@@ -93,7 +93,7 @@ class BrokerIndependent(
         threadBuilder.factory()
     ).asCoroutineDispatcher()
 
-    // Scope for launch coroutines.
+    // Scope for launch coroutines. Note that it is only used to save a reference to be canceled later.
     private var scope: CoroutineScope? = null
 
     // Creating a thread from the builder where coroutines will be created from.
