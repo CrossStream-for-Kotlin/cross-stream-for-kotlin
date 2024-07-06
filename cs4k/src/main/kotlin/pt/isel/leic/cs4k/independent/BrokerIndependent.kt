@@ -93,13 +93,13 @@ class BrokerIndependent(
         threadBuilder.factory()
     ).asCoroutineDispatcher()
 
+    // Scope for launch coroutines.
+    private var scope: CoroutineScope? = null
+
     // Creating a thread from the builder where coroutines will be created from.
     private val brokerThread = threadBuilder.start {
         setup()
     }
-
-    // Scope for launch coroutines.
-    private var scope: CoroutineScope? = null
 
     /**
      * Does the initial steps to start up.
