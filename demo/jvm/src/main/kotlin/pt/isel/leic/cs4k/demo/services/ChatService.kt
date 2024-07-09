@@ -29,11 +29,11 @@ class ChatService(val broker: Broker) {
     private val sseEmittersToKeepAlive = mutableListOf<SseEmitter>()
     private val lock = ReentrantLock()
 
-    private val mutableListFlow = MessageQueue<Pair<Flow<Event>, (Event) -> Unit>>(1000)
+    private val messageQueueFlow = MessageQueue<Pair<Flow<Event>, (Event) -> Unit>>(1000)
     private val th: Thread = Thread {
         runBlocking {
             while (true) {
-                mutableListFlow.dequeue(Duration.INFINITE).let { (flow, handler) ->
+                messageQueueFlow.dequeue(Duration.INFINITE).let { (flow, handler) ->
                     this.launch {
                         flow.collect { event ->
                             handler(event)
@@ -105,7 +105,7 @@ class ChatService(val broker: Broker) {
 
         val flow = broker.subscribeToFlow(group ?: generalGroup)
         runBlocking {
-            mutableListFlow.enqueue(
+            messageQueueFlow.enqueue(
                 flow to { event ->
                     try {
                         val message =
