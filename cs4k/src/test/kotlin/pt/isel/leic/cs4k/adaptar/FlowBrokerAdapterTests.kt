@@ -21,7 +21,7 @@ class FlowBrokerAdapterTests {
     @Test
     fun `one subscriber collect last event of a finished topic via flow`() {
         // Arrange
-        val broker = BrokerRedis(RedisNode(Environment.getRedisHost(), Environment.getRedisPort()))
+        val broker = BrokerPostgreSQL(Environment.getPostgreSqlDbUrl())
         val topic = newRandomTopic()
         val message = newRandomMessage()
 
