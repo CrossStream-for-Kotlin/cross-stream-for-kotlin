@@ -308,9 +308,10 @@ class BrokerRedis(
      * @return The event id.
      * @throws UnexpectedBrokerException If an invalid state exists.
      */
-    private fun getEventIdAndUpdateHistory(topic: String, message: String, isLast: Boolean): Long =
+    private fun getEventIdAndUpdateHistory(topic: String, message: String, isLast: Boolean): Long {
         connectionPool.borrowObject().use { conn ->
-            getSyncCommands(conn).eval(
+            val sync = getSyncCommands(conn)
+            val eventId: Long = sync.eval(
                 GET_EVENT_ID_AND_UPDATE_HISTORY_SCRIPT,
                 ScriptOutputType.INTEGER,
                 arrayOf(prefix + topic),
@@ -320,7 +321,12 @@ class BrokerRedis(
                 Event.Prop.IS_LAST.key,
                 isLast.toString()
             )
+            if (isCluster) {
+                sync.waitForReplication((redisNodes.size / 2) + 1, WAIT_TIME_FOR_REPLICATION)
+            }
+            return eventId
         }
+    }
 
     /**
      * Get the last event from the topic.
@@ -386,6 +392,9 @@ class BrokerRedis(
 
         // Unsupported state default message.
         private const val UNSUPPORTED_STATE_DEFAULT_MESSAGE = "Unsupported state."
+
+        // Wait time for replication.
+        private const val WAIT_TIME_FOR_REPLICATION = 10_000L
 
         /**
          * Create a redis client for database interactions.
