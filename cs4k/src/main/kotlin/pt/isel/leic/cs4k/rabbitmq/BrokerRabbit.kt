@@ -14,6 +14,7 @@ import pt.isel.leic.cs4k.common.AssociatedSubscribers
 import pt.isel.leic.cs4k.common.BrokerException.BrokerLostConnectionException
 import pt.isel.leic.cs4k.common.BrokerException.BrokerTurnOffException
 import pt.isel.leic.cs4k.common.BrokerException.NodeListIsEmptyException
+import pt.isel.leic.cs4k.common.BrokerException.UnauthorizedTopicException
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.common.RetryExecutor
 import pt.isel.leic.cs4k.common.Subscriber
@@ -104,7 +105,7 @@ class BrokerRabbit(
     // Exchange used to send offset requests to.
     private val historyExchange = "cs4k-history-exchange"
 
-    // Storage for topics that are consumed, storing channel, last offset and last event.
+    // Storage for topics that are consumed, storing last offset and last event.
     private val consumedTopics = ConsumedTopics()
 
     // Flag that indicates if broker is gracefully shutting down.
@@ -130,7 +131,7 @@ class BrokerRabbit(
                 message.message,
                 message.isLast
             )
-            logger.info("event received -> {}", event)
+            logger.info("[{}] event received -> '{}'", identifier, event)
             associatedSubscribers.getAll(event.topic)
                 .forEach { it.handler(event) }
         }
@@ -173,7 +174,7 @@ class BrokerRabbit(
          * @param request The request received.
          */
         private fun handleRequest(request: HistoryShareRequest) {
-            logger.info("received request from {}", request.senderQueue)
+            logger.info("[{}] received request from '{}'", identifier, request.senderQueue)
             val publishChannel = publishingChannelPool.getChannel()
             val accessInfo = consumedTopics.getAllLatestEventInfos()
             val response = HistoryShareResponse(accessInfo).toHistoryShareMessage()
@@ -195,7 +196,7 @@ class BrokerRabbit(
          */
         private fun handleResponse(response: HistoryShareResponse) {
             if (gotInfoFromPeer.compareAndSet(false, true)) {
-                logger.info("received response, storing...")
+                logger.info("[{}] received response, storing...", identifier)
                 consumedTopics.fullUpdate(response.allConsumeInfo)
                 retryExecutor.execute({ BrokerLostConnectionException() }, {
                     channel.queueBind(brokerId, historyExchange, "")
@@ -318,7 +319,7 @@ class BrokerRabbit(
                 null,
                 HistoryShareMessage.serialize(request).toByteArray()
             )
-            logger.info("started up - sending request to obtain info")
+            logger.info("[{}] started up - sending request to obtain info", identifier)
             publishingChannelPool.stopUsingChannel(publishingChannel)
         }, retryCondition)
     }
@@ -330,7 +331,7 @@ class BrokerRabbit(
 
         val subscriber = Subscriber(UUID.randomUUID(), handler)
         associatedSubscribers.addToKey(topic, subscriber)
-        logAndPublishToSystemTopic("new subscriber topic $topic id ${subscriber.id}")
+        logAndPublishToSystemTopic("new subscriber topic '$topic' id '${subscriber.id}'")
 
         getLastEvent(topic)?.let { event -> handler(event) }
 
@@ -352,12 +353,15 @@ class BrokerRabbit(
      */
     private fun unsubscribe(topic: String, subscriber: Subscriber) {
         associatedSubscribers.removeIf(topic, { it.id == subscriber.id })
-        logAndPublishToSystemTopic("unsubscribe topic $topic id ${subscriber.id}")
+        logAndPublishToSystemTopic("unsubscribe topic '$topic' id '${subscriber.id}'")
     }
 
     override fun publish(topic: String, message: String, isLastMessage: Boolean) {
         if (isShutdown.get()) {
             throw BrokerTurnOffException("Cannot invoke ${::subscribe.name}.")
+        }
+        if (topic == SYSTEM_TOPIC) {
+            throw UnauthorizedTopicException()
         }
 
         publishToStream(topic, message, isLastMessage)
@@ -378,7 +382,7 @@ class BrokerRabbit(
             publishingChannelPool.stopUsingChannel(channel)
         }, retryCondition)
         if (topic != SYSTEM_TOPIC) {
-            logAndPublishToSystemTopic("notify topic $topic event message $message")
+            logAndPublishToSystemTopic("notify topic '$topic' event message '$message'")
         }
     }
 

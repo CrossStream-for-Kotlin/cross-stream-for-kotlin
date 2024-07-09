@@ -25,7 +25,7 @@ import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.Listen
 import pt.isel.leic.cs4k.postgreSQL.ChannelCommandOperation.UnListen
 import java.sql.Connection
 import java.sql.SQLException
-import java.util.*
+import java.util.UUID
 
 /**
  * Broker PostgreSQL.
