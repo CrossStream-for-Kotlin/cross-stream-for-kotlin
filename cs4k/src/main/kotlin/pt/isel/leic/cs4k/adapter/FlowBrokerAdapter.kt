@@ -3,6 +3,7 @@ package pt.isel.leic.cs4k.adapter
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.runBlocking
 import pt.isel.leic.cs4k.Broker
 import pt.isel.leic.cs4k.common.Event
 
@@ -14,7 +15,9 @@ import pt.isel.leic.cs4k.common.Event
  */
 fun Broker.subscribeToFlow(topic: String): Flow<Event> = callbackFlow {
     val unsubscribe = this@subscribeToFlow.subscribe(topic) { event ->
-        trySend(event)
+        runBlocking {
+            send(event)
+        }
         if (event.isLast) {
             close()
         }
