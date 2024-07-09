@@ -6,8 +6,6 @@ import kotlinx.coroutines.runBlocking
 import pt.isel.leic.cs4k.adapter.subscribeToFlow
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.postgreSQL.BrokerPostgreSQL
-import pt.isel.leic.cs4k.redis.BrokerRedis
-import pt.isel.leic.cs4k.redis.RedisNode
 import pt.isel.leic.cs4k.utils.Environment
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.abs
