@@ -211,7 +211,7 @@ class AsynchronousSocketChannelTests {
                         handleClient(clientSocket)
                     }
                 } catch (e: Exception) {
-                    logger.error("Error accepting connection: ${e.message}")
+                    logger.info("Error accepting connection: ${e.message}")
                 }
             }
         }
@@ -228,7 +228,7 @@ class AsynchronousSocketChannelTests {
                 logger.info("Message received: {}", content)
             }
         } catch (e: Exception) {
-            logger.error("Error handling client: ${e.message}")
+            logger.info("Error handling client: ${e.message}")
         } finally {
             clientSocket.close()
         }

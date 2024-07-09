@@ -2,7 +2,6 @@ package pt.isel.leic.cs4k.independent
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -236,7 +235,12 @@ class BrokerIndependent(
             }
         } catch (ex: Exception) {
             logger.info("[{}:{}] <-X- [{}]", selfIp, listeningPort, inetAddress.hostAddress)
-            withContext(Dispatchers.IO) { inboundConnection.socketChannel.close() }
+            withContext(executorCoroutineDispatcher) {
+                val socketChannel = inboundConnection.socketChannel
+                if (socketChannel.isOpen) {
+                    socketChannel.close()
+                }
+            }
             neighbors.updateInboundConnection(inetAddress, null)
         }
     }
@@ -254,7 +258,7 @@ class BrokerIndependent(
                 neighbors
                     .getAll()
                     .forEach { neighbor ->
-                        if (!neighbor.isOutboundConnectionActive && neighbor.port != null) {
+                        if (!neighbor.isOutboundConnectionActive) {
                             val inetSocketAddress = InetSocketAddress(neighbor.inetAddress, neighbor.port)
                             try {
                                 val outboundSocketChannel = AsynchronousSocketChannel.open()
@@ -346,7 +350,11 @@ class BrokerIndependent(
                         logger.info("[{}:{}] -> '{}' -> [{}:{}]", selfIp, listeningPort, eventJson, neighbor.inetAddress, neighbor.port)
                     } catch (ex: Exception) {
                         logger.info("[{}:{}] -> '{}' -X-> [{}:{}]", selfIp, listeningPort, eventJson, neighbor.inetAddress, neighbor.port)
-                        withContext(Dispatchers.IO) { socketChannel.close() }
+                        withContext(executorCoroutineDispatcher) {
+                            if (socketChannel.isOpen) {
+                                socketChannel.close()
+                            }
+                        }
                         neighbors.update(
                             neighbor.copy(
                                 outboundConnection = outboundConnection.copy(
@@ -358,9 +366,9 @@ class BrokerIndependent(
                         neighbor.eventQueue.enqueue(event)
                     }
                 } else {
-                    neighbor.eventQueue.enqueue(event)
+                    return
                 }
-            } ?: break
+            } ?: return
         }
     }
 
@@ -400,12 +408,20 @@ class BrokerIndependent(
 
         isShutdown = true
         scope?.cancel()
-        neighbors.getAll().forEach {
-            it.outboundConnection?.socketChannel?.close()
-            it.inboundConnection?.socketChannel?.close()
-        }
         brokerThread.interrupt()
         brokerThread.join()
+        executorCoroutineDispatcher.close()
+        neighbors.getAll().forEach { neighbor ->
+            val inboundSocketChannel = neighbor.inboundConnection?.socketChannel
+            if (inboundSocketChannel != null && inboundSocketChannel.isOpen) {
+                inboundSocketChannel.close()
+            }
+
+            val outboundSocketChannel = neighbor.outboundConnection?.socketChannel
+            if (outboundSocketChannel != null && outboundSocketChannel.isOpen) {
+                outboundSocketChannel.close()
+            }
+        }
     }
 
     /**
@@ -429,7 +445,7 @@ class BrokerIndependent(
         logger.info(logMessage)
         if (enableLogging) {
             runBlocking {
-                controlQueue.enqueue(Event(SYSTEM_TOPIC, IGNORE_EVENT_ID, message, false))
+                controlQueue.enqueue(Event(SYSTEM_TOPIC, IGNORE_EVENT_ID, message))
             }
         }
     }

@@ -15,7 +15,7 @@ import java.net.InetAddress
  */
 data class Neighbor(
     val inetAddress: InetAddress,
-    val port: Int? = null,
+    val port: Int,
     val inboundConnection: InboundConnection? = null,
     val outboundConnection: OutboundConnection? = null,
     val eventQueue: MessageQueue<Event> = MessageQueue(EVENTS_TO_PROCESS_CAPACITY)

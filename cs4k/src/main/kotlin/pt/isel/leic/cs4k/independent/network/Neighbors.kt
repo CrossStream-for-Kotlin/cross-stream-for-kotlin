@@ -31,7 +31,7 @@ class Neighbors {
      * @param port The neighbour port number.
      * @return The neighbor if exists.
      */
-    fun get(inetAddress: InetAddress, port: Int?) = lock.withLock {
+    fun get(inetAddress: InetAddress, port: Int) = lock.withLock {
         set.find { it.inetAddress == inetAddress && it.port == port }
     }
 
@@ -88,7 +88,7 @@ class Neighbors {
     }
 
     /**
-     * Update a neighbor.
+     * Update a neighbor, if it exists.
      *
      * @param neighbor The updated neighbour.
      */
