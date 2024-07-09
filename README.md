@@ -24,20 +24,29 @@
     * [RabbitMQ Cluster](#rabbitmq-cluster)
     * [RabbitMQ Single Node](#rabbitmq-single-node)
   * [Option 4 - Without External System](#option-4---without-external-system)
+* [Library guarantees](#library-guarantees)
+* [Usage example](#usage-example)
 
 ---
 
 ## Introduction
 
-**CrossStream for Kotlin** aims to reduce the complexity
-of developing multi-node backend systems that use Server-sent events or WebSockets
-to communicate with front-end applications. To this end, the piece of software provides
-four configurable options for communication between nodes, facilitating integration in various
-contexts. In the first three options, the library uses the external systems PostgreSQL,
-Redis and RabbitMQ for communication between nodes. On the other hand, in the fourth
-option, the library does not depend on an existing external system. Alternatively, the nodes
-are responsible for communicating and coordinating with each other via sockets and TCP/IP
-connections.
+In web-based architecture systems, there are front-end applications and backend systems that typically interact through 
+the HTTP protocol with a request-response pattern. Frontend applications provide an interface to users, acting as the 
+client. On the other hand, backend systems expose HTTP APIs, acting as the server. In this architecture, Server-sent
+events and the WebSockets protocol allow servers to notify clients asynchronously. For this, long-term TCP/IP connections 
+are established between clients and servers, always initiated by clients. However, these connections are not shared 
+across multiple nodes in multi-node backend systems. Consequently, the use of Server-sent events and the WebSockets protocol
+poses problems and challenges that hinder the development of multi-node backend systems.
+
+**CrossStream for Kotlin** aims to reduce the complexity of developing multi-node backend systems that use Server-sent events 
+or WebSockets to communicate with front-end applications. In this context, the piece of software provides four configurable 
+options for communication between nodes, facilitating integration in various contexts.
+In the first three options, the library uses external systems such as PostgreSQL, Redis,
+and RabbitMQ for inter-node communication. In the fourth option, the library does not
+depend on an external system for inter-node communication. Instead, the nodes themselves
+are responsible for communication and coordination among themselves through sockets and
+TCP/IP connections.
 
 ---
 
@@ -126,7 +135,8 @@ export GITHUB_TOKEN_WITH_PACKAGE_PERMISSIONS=<github_token_with_read:packages_pe
 
 ## Functionalities
 
-All library options provide the functionalities present in the [Broker](./cs4k/src/main/kotlin/pt/isel/leic/cs4k/Broker.kt) interface/contract.
+All library options provide the functionalities present in the [Broker](./cs4k/src/main/kotlin/pt/isel/leic/cs4k/Broker.kt) interface/contract, although with different guarantees.
+Additionally, all of these options support the use of a [FlowBrokerAdapter](./cs4k/src/main/kotlin/pt/isel/leic/cs4k/adapter/FlowBrokerAdapter.kt).
 
 ---
 
@@ -154,9 +164,9 @@ data class Event(
 ```
 
 - `topic` - The topic of the event.
-- `id` - The identifier of the event.
+- `id` - The sequential identifier of the event. The first identifier is '0' and '-1' means that the order of event identifiers should be ignored.
 - `message` - The message of the event.
-- `isLast` If the event is the last one.
+- `isLast` - If the event is the last one.
 
 ---
 
@@ -212,12 +222,11 @@ class BrokerPostgreSQL(
 ```
 
 - `postgreSQLDbUrl` - The PostgreSQL database URL.
-- `preventConsecutiveDuplicateEvents` Prevent consecutive duplicate events.
-- `dbConnectionPoolSize` The maximum size that the JDBC connection pool is allowed to reach.
-- `identifier` Identifier of instance/node used in logs.
-- `enableLogging` Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
-- `brokerThreadType` Thread Builder responsible for creating threads.
-
+- `preventConsecutiveDuplicateEvents` - Prevent consecutive duplicate events. Note that with this configuration the library's performance may be significantly affected.
+- `dbConnectionPoolSize` - The maximum size that the JDBC connection pool is allowed to reach.
+- `identifier` - Identifier of instance/node used in logs.
+- `enableLogging` - Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
+- `brokerThreadType` - Thread Builder responsible for creating threads.
 
 ---
 
@@ -236,7 +245,7 @@ class BrokerRedis(
 ```
 
 - `redisNodes` - The list of [RedisNode](#redisnode).
-- `preventConsecutiveDuplicateEvents` - Prevent consecutive duplicate events. 
+- `preventConsecutiveDuplicateEvents` - Prevent consecutive duplicate events. Note that with this configuration the library's performance may be significantly affected.
 - `dbConnectionPoolSize` - The maximum size that the connection pool is allowed to reach.
 - `identifier` - Identifier of instance/node used in logs.
 - `enableLogging` - Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
@@ -256,7 +265,7 @@ class BrokerRedis {
 ```
 
 - `redisNodes` - The [RedisNode](#redisnode).
-- `preventConsecutiveDuplicateEvents` - Prevent consecutive duplicate events.
+- `preventConsecutiveDuplicateEvents` - Prevent consecutive duplicate events. Note that with this configuration the library's performance may be significantly affected.
 - `dbConnectionPoolSize` - The maximum size that the connection pool is allowed to reach.
 - `identifier` - Identifier of instance/node used in logs.
 - `enableLogging` - Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
@@ -270,8 +279,8 @@ data class RedisNode(
 )
 ```
 
-- `host` The host name.
-- `port` The port number.
+- `host` - The host name.
+- `port` - The port number.
 
 ---
 
@@ -328,8 +337,8 @@ data class RabbitNode(
 )
 ```
 
-- `host` The host name.
-- `port` The port number.
+- `host` - The host name.
+- `port` - The port number.
 
 ---
 
@@ -345,7 +354,7 @@ class BrokerIndependent(
 ) : Broker
 ```
 
-- `hostname` - The hostname or ip address.
+- `hostname` - The hostname or ip address of instance/node.
 - `serviceDiscoveryConfig` - [ServiceDiscoverConfig](#servicediscoverconfig).
 - `identifier` - Identifier of instance/node used in logs.
 - `enableLogging` - Logging mode to view logs with system topic [SYSTEM_TOPIC](#get-system-topic-used-in-logging-mode-to-monitor-library).
@@ -370,6 +379,7 @@ data class MulticastServiceDiscoveryConfig(
   override val periodicServiceDiscoveryUpdates: Long = DEFAULT_SEND_DATAGRAM_PACKET_AGAIN_TIME
 ) : ServiceDiscoveryConfig
 ````
+
 - `multicastIp` - The multicast IP.
 - `multicastPort` - The multicast port.
 
@@ -382,3 +392,24 @@ data class DNSServiceDiscoveryConfig(
 ) : ServiceDiscoveryConfig
 ```
 - `serviceName` - The service name.
+
+---
+
+## Library guarantees
+
+| Guarantee                       | Option 1 | Option 2 | Option 3 | Option 4 |
+|---------------------------------|----------|----------|----------|----------|
+| Consistency                     | eventual | eventual | eventual | none     |
+| Serialization                   | yes      | no       | no       | no       |
+| No loss of events               | yes      | yes      | yes      | no       |
+| No duplicate consecutive events | *        | *        | yes      | no       |
+| Latest event of each topic      | yes      | yes      | yes      | no       |
+
+*Depends on the configuration
+
+---
+
+## Usage example
+
+In the [demo](./demo/) directory there is an example chat application in which the multi-node backend system uses 
+Server-sent events to communicate with the front-end applications.
