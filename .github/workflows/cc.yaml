@@ -3,7 +3,7 @@ name: Continuous Check
 on:
   push:
     paths:
-      ['cs4k/**']
+      ['cs4k/**', '.github/**']
 
 jobs:
   build:
