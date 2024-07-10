@@ -25,7 +25,7 @@ class BrokerIndependentTests {
 
     @BeforeEach
     fun setUp() {
-        Thread.sleep(2_000)
+        Thread.sleep(5_000)
     }
 
     // ---- simple tests ----

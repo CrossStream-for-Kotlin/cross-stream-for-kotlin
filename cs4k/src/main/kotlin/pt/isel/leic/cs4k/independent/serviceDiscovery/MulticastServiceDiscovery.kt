@@ -173,7 +173,7 @@ class MulticastServiceDiscovery(
                 if (selfIp != LOOP_BACK_IP) {
                     return networkInterface
                 } else if (
-                    networkInterface.inetAddresses().anyMatch { it is Inet4Address }
+                    networkInterface.inetAddresses().anyMatch { it is Inet4Address && it.isReachable(1_000) }
                 ) {
                     return networkInterface
                 }
