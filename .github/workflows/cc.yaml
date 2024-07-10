@@ -24,4 +24,4 @@ jobs:
           RABBIT_USR: ${{ secrets.RABBIT_USR }}
           RABBIT_PSW: ${{ secrets.RABBIT_PSW }}
           RABBIT_ADDRESS: ${{ vars.RABBIT_ADDRESS }}
-        run: ./cs4k/gradlew -p cs4k check -i
+        run: ./cs4k/gradlew -p cs4k check
