@@ -172,7 +172,7 @@ class MulticastServiceDiscovery(
             if (networkInterface.isUp && networkInterface.supportsMulticast() && !networkInterface.isLoopback) {
                 if (selfIp != LOOP_BACK_IP) {
                     return networkInterface
-                } else if (!networkInterface.name.startsWith("eth") &&
+                } else if (
                     networkInterface.inetAddresses().anyMatch { it is Inet4Address }
                 ) {
                     return networkInterface
