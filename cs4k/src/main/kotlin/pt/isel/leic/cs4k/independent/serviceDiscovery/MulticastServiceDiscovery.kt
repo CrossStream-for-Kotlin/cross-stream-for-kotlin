@@ -8,11 +8,9 @@ import pt.isel.leic.cs4k.independent.network.Neighbors
 import pt.isel.leic.cs4k.independent.serviceDiscovery.utils.DatagramPacketInfo
 import java.lang.Thread.sleep
 import java.net.DatagramPacket
-import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.MulticastSocket
-import java.net.NetworkInterface
 
 /**
  * Responsible for service discovery through multicast, i.e.:
@@ -56,9 +54,8 @@ class MulticastServiceDiscovery(
     private val listenMulticastSocketThread = threadBuilder.unstarted {
         retryExecutor.execute({ BrokerException.UnexpectedBrokerException() }, {
             val multicastSocket = MulticastSocket(multicastPort)
-            val networkInterface = getActiveMulticastNetworkInterface()
-            joinMulticastGroup(multicastSocket, networkInterface)
-            listenMulticastSocket(multicastSocket, networkInterface)
+            joinMulticastGroup(multicastSocket)
+            listenMulticastSocket(multicastSocket)
         }, retryCondition)
     }
 
@@ -77,12 +74,11 @@ class MulticastServiceDiscovery(
      * @param multicastSocket The multicast socket to join to.
      * @param networkInterface The network interface that supports multicast.
      */
-    private fun joinMulticastGroup(multicastSocket: MulticastSocket, networkInterface: NetworkInterface) {
+    private fun joinMulticastGroup(multicastSocket: MulticastSocket) {
         // Redefine the Time To Live value of IP multicast packets sent.
         // I.e. The maximum number of machine-to-machine hops that packets can make before being discarded.
         multicastSocket.timeToLive = TIME_TO_LIVE
-
-        multicastSocket.joinGroup(multicastInetSocketAddress, networkInterface)
+        multicastSocket.joinGroup(multicastInetSocketAddress, null)
     }
 
     /**
@@ -91,16 +87,15 @@ class MulticastServiceDiscovery(
      * @param multicastSocket The multicast socket to listen to.
      * @param networkInterface The network interface that supports multicast.
      */
-    private fun listenMulticastSocket(multicastSocket: MulticastSocket, networkInterface: NetworkInterface) {
+    private fun listenMulticastSocket(multicastSocket: MulticastSocket) {
         logger.info("[{}:{}] reading multicast socket", selfIp, port)
         while (!listenMulticastSocketThread.isInterrupted) {
             try {
                 val receivedDatagramPacket = DatagramPacket(inboundBuffer, inboundBuffer.size)
                 multicastSocket.receive(receivedDatagramPacket)
-
                 processDatagramPacket(receivedDatagramPacket)
             } catch (ex: Exception) {
-                multicastSocket.leaveGroup(multicastInetSocketAddress, networkInterface)
+                multicastSocket.leaveGroup(multicastInetSocketAddress, null)
                 multicastSocket.close()
                 if (ex is InterruptedException) {
                     logger.info("[{}:{}] stop reading multicast socket", selfIp, port)
@@ -157,31 +152,6 @@ class MulticastServiceDiscovery(
                 }
             }
         }
-    }
-
-    /**
-     * Get one active network interface that supports multicast.
-     *
-     * @return The first network interface find that supports multicast.
-     * @throws Exception If there is no active network interface that supports multicast
-     */
-    private fun getActiveMulticastNetworkInterface(): NetworkInterface {
-        val networkInterfaces = NetworkInterface.getNetworkInterfaces()
-        while (networkInterfaces.hasMoreElements()) {
-            val networkInterface = networkInterfaces.nextElement()
-            if (networkInterface.isUp && networkInterface.supportsMulticast() && !networkInterface.isLoopback) {
-                if (selfIp != LOOP_BACK_IP) {
-                    logger.info("chosen interface for multicast => {}", networkInterface.displayName)
-                    return networkInterface
-                } else if (
-                    networkInterface.inetAddresses().anyMatch { it is Inet4Address && it.isReachable(500) }
-                ) {
-                    logger.info("chosen interface for multicast => {}", networkInterface.displayName)
-                    return networkInterface
-                }
-            }
-        }
-        throw Exception("[$selfIp] There is no active network interface that supports multicast!")
     }
 
     override fun start() {
