@@ -171,10 +171,12 @@ class MulticastServiceDiscovery(
             val networkInterface = networkInterfaces.nextElement()
             if (networkInterface.isUp && networkInterface.supportsMulticast() && !networkInterface.isLoopback) {
                 if (selfIp != LOOP_BACK_IP) {
+                    logger.info("chosen interface for multicast => {}", networkInterface.displayName)
                     return networkInterface
                 } else if (
-                    networkInterface.inetAddresses().anyMatch { it is Inet4Address && it.isReachable(1_000) }
+                    networkInterface.inetAddresses().anyMatch { it is Inet4Address && it.isReachable(500) }
                 ) {
+                    logger.info("chosen interface for multicast => {}", networkInterface.displayName)
                     return networkInterface
                 }
             }
