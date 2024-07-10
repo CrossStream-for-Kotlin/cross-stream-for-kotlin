@@ -51,7 +51,7 @@ class AsynchronousSocketChannelTests {
             val socketChannel = AsynchronousSocketChannel.open()
             assertThrows<Exception> {
                 runBlocking {
-                    socketChannel.connectSuspend(InetSocketAddress("0.0.0.0", 8888))
+                    socketChannel.connectSuspend(InetSocketAddress("256.256.256.256", 8888))
                 }
             }
         }
