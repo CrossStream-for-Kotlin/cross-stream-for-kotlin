@@ -26,19 +26,20 @@ class ChatService(val broker: Broker) {
 
     private val generalGroup = "general"
 
-    private val sseEmittersToKeepAlive = mutableListOf<SseEmitter>()
+    private val sseEmittersToKeepAlive = mutableListOf<SseTracker>()
     private val lock = ReentrantLock()
 
-    private val messageQueueFlow = MessageQueue<Pair<Flow<Event>, (Event) -> Unit>>(1000)
+    private val messageQueueFlow = MessageQueue<Triple<SseTracker, Flow<Event>, (Event) -> Unit>>(1000)
     private val th: Thread = Thread {
         runBlocking {
             while (true) {
-                messageQueueFlow.dequeue(Duration.INFINITE).let { (flow, handler) ->
-                    this.launch {
+                messageQueueFlow.dequeue(Duration.INFINITE).let { (sseTracker, flow, handler) ->
+                    val job = this.launch {
                         flow.collect { event ->
                             handler(event)
                         }
                     }
+                    sseTracker.job = job
                 }
             }
         }
@@ -59,7 +60,7 @@ class ChatService(val broker: Broker) {
      */
     fun newListener(group: String?, subscribedNode: String): SseEmitter {
         val sseEmitter = SseEmitter(TimeUnit.MINUTES.toMillis(30))
-        lock.withLock { sseEmittersToKeepAlive.add(sseEmitter) }
+        lock.withLock { sseEmittersToKeepAlive.add(SseTracker(sseEmitter)) }
 
         val unsubscribeCallback = broker.subscribe(
             topic = group ?: generalGroup,
@@ -89,11 +90,11 @@ class ChatService(val broker: Broker) {
 
         sseEmitter.onCompletion {
             unsubscribeCallback()
-            lock.withLock { sseEmittersToKeepAlive.remove(sseEmitter) }
+            lock.withLock { sseEmittersToKeepAlive.removeIf { it.sseEmitter == sseEmitter } }
         }
         sseEmitter.onError {
             unsubscribeCallback()
-            lock.withLock { sseEmittersToKeepAlive.remove(sseEmitter) }
+            lock.withLock { sseEmittersToKeepAlive.removeIf { it.sseEmitter == sseEmitter } }
         }
 
         return sseEmitter
@@ -101,12 +102,13 @@ class ChatService(val broker: Broker) {
 
     fun newListenerFlow(group: String?, subscribedNode: String): SseEmitter {
         val sseEmitter = SseEmitter(TimeUnit.MINUTES.toMillis(30))
-        lock.withLock { sseEmittersToKeepAlive.add(sseEmitter) }
+        val tracker = SseTracker(sseEmitter)
+        lock.withLock { sseEmittersToKeepAlive.add(tracker) }
 
         val flow = broker.subscribeToFlow(group ?: generalGroup)
         runBlocking {
             messageQueueFlow.enqueue(
-                flow to { event ->
+                Triple(tracker, flow) { event ->
                     try {
                         val message =
                             if (event.topic != Broker.SYSTEM_TOPIC) {
@@ -130,10 +132,16 @@ class ChatService(val broker: Broker) {
         }
 
         sseEmitter.onCompletion {
-            lock.withLock { sseEmittersToKeepAlive.remove(sseEmitter) }
+            lock.withLock {
+                sseEmittersToKeepAlive.remove(tracker)
+                tracker.job?.cancel()
+            }
         }
         sseEmitter.onError {
-            lock.withLock { sseEmittersToKeepAlive.remove(sseEmitter) }
+            lock.withLock {
+                sseEmittersToKeepAlive.remove(tracker)
+                tracker.job?.cancel()
+            }
         }
 
         return sseEmitter
@@ -162,9 +170,9 @@ class ChatService(val broker: Broker) {
      */
     private fun keepAlive() = lock.withLock {
         val keepAlive = SseEvent.KeepAlive(Instant.now().epochSecond)
-        sseEmittersToKeepAlive.forEach { sseEmitter ->
+        sseEmittersToKeepAlive.forEach { sseTracker ->
             try {
-                keepAlive.writeTo(sseEmitter)
+                keepAlive.writeTo(sseTracker.sseEmitter)
             } catch (ex: Exception) {
                 // Ignore
             }

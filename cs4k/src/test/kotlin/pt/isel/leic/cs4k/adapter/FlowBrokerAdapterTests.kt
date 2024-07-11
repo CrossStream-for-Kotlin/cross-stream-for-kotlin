@@ -1,9 +1,8 @@
-package pt.isel.leic.cs4k.adaptar
+package pt.isel.leic.cs4k.adapter
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import pt.isel.leic.cs4k.adapter.subscribeToFlow
 import pt.isel.leic.cs4k.common.Event
 import pt.isel.leic.cs4k.postgreSQL.BrokerPostgreSQL
 import pt.isel.leic.cs4k.utils.Environment
