@@ -445,7 +445,7 @@ class BrokerIndependent(
         logger.info(logMessage)
         if (enableLogging) {
             runBlocking {
-                controlQueue.enqueue(Event(SYSTEM_TOPIC, IGNORE_EVENT_ID, message))
+                controlQueue.enqueue(Event(SYSTEM_TOPIC, IGNORE_EVENT_ID, logMessage))
             }
         }
     }

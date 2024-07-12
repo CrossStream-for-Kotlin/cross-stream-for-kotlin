@@ -321,7 +321,7 @@ class BrokerRedis(
                 Event.Prop.IS_LAST.key,
                 isLast.toString()
             )
-            if (isCluster) {
+            if (isCluster && sync.info(REPLICATION_INFO).contains(MASTER_ROLE)) {
                 sync.waitForReplication((redisNodes.size / 2) + 1, WAIT_TIME_FOR_REPLICATION)
             }
             return eventId
@@ -393,8 +393,10 @@ class BrokerRedis(
         // Unsupported state default message.
         private const val UNSUPPORTED_STATE_DEFAULT_MESSAGE = "Unsupported state."
 
-        // Wait time for replication.
-        private const val WAIT_TIME_FOR_REPLICATION = 10_000L
+        // Wait time for replication in master node.
+        private const val REPLICATION_INFO = "replication"
+        private const val MASTER_ROLE = "role:master"
+        private const val WAIT_TIME_FOR_REPLICATION = 1L
 
         /**
          * Create a redis client for database interactions.
