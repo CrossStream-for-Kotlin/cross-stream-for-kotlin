@@ -39,7 +39,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webflux")
 
     // For CS4K Library.
-    implementation("pt.isel.leic.cs4k:cs4k:0.3.5")
+    implementation("pt.isel.leic.cs4k:cs4k:0.3.6")
 }
 
 tasks.test {
