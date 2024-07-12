@@ -72,7 +72,6 @@ class MulticastServiceDiscovery(
      * Join the multicast group.
      *
      * @param multicastSocket The multicast socket to join to.
-     * @param networkInterface The network interface that supports multicast.
      */
     private fun joinMulticastGroup(multicastSocket: MulticastSocket) {
         // Redefine the Time To Live value of IP multicast packets sent.
@@ -85,7 +84,6 @@ class MulticastServiceDiscovery(
      * Blocks the thread reading the socket and processes multicast datagram packet received.
      *
      * @param multicastSocket The multicast socket to listen to.
-     * @param networkInterface The network interface that supports multicast.
      */
     private fun listenMulticastSocket(multicastSocket: MulticastSocket) {
         logger.info("[{}:{}] reading multicast socket", selfIp, port)

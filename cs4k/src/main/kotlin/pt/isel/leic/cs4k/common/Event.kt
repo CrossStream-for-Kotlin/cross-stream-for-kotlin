@@ -5,6 +5,7 @@ package pt.isel.leic.cs4k.common
  *
  * @property topic The topic of the event.
  * @property id The identifier of the event.
+ * The first identifier is '0' and '-1' means that the order of event identifiers should be ignored.
  * @property message The message of the event.
  * @property isLast If the event is the last one.
  */
