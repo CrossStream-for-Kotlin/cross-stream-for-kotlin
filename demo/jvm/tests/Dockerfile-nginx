@@ -1,6 +1,6 @@
 
 # Do the build process in multiple stages to reduce the size of the final image
-FROM node:alpine as build
+FROM node:20-alpine3.19 as build
 
 WORKDIR /app
 
