@@ -4,7 +4,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
 import pt.isel.leic.cs4k.Broker
-import pt.isel.leic.cs4k.demo.Environment.CS4K_OPTION
+import pt.isel.leic.cs4k.demo.Environment.KEY_CS4K_OPTION
 import pt.isel.leic.cs4k.independent.BrokerIndependent
 import pt.isel.leic.cs4k.independent.serviceDiscovery.config.DNSServiceDiscoveryConfig
 import pt.isel.leic.cs4k.independent.serviceDiscovery.config.MulticastServiceDiscoveryConfig
@@ -59,10 +59,14 @@ class DemoApplication {
                 enableLogging = true
             )
 
-            else -> throw Exception("Missing environment variable $CS4K_OPTION.")
+            else -> throw Exception("Missing environment variable $KEY_CS4K_OPTION.")
         }
 }
 
+/**
+ * Main entrypoint of the application.
+ * Do not run app through here (if in IDE). Use one of the gradle tasks ending in "composeUp" to execute the app.
+ */
 fun main(args: Array<String>) {
     runApplication<DemoApplication>(*args)
 }

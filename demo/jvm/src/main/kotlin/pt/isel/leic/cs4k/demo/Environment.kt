@@ -6,7 +6,8 @@ package pt.isel.leic.cs4k.demo
 object Environment {
 
     // Option for CS4k library.
-    const val CS4K_OPTION = "CS4K_OPTION"
+    const val KEY_CS4K_OPTION = "CS4K_OPTION"
+    private const val KEY_CS4K_WITH_FLOW = "CS4K_WITH_FLOW"
     private const val KEY_POSTGRESQL_DB_URL = "POSTGRESQL_DB_URL"
     private const val KEY_REDIS_USR = "REDIS_USR"
     private const val KEY_REDIS_PSW = "REDIS_PSW"
@@ -34,10 +35,16 @@ object Environment {
         ?: throw NullPointerException("Missing environment variable $key.")
 
     /**
-     * Get the cs4k library option from the environment variable [CS4K_OPTION].
+     * Get the cs4k library option from the environment variable [KEY_CS4K_OPTION].
      * @return The cs4k option or null if the environment variable is missing.
      */
-    fun getCS4KOption() = getOptionalEnvVar(CS4K_OPTION)?.toFloat()
+    fun getCS4KOption() = getOptionalEnvVar(KEY_CS4K_OPTION)?.toFloat()
+
+    /**
+     * Get the cs4k option to use flow from the environment variable [KEY_CS4K_WITH_FLOW].
+     * @return True, if using flow, false if not or if no environment variable is present.
+     */
+    fun getCS4KWithFlow() = getOptionalEnvVar(KEY_CS4K_WITH_FLOW).toBoolean()
 
     /**
      * Obtains the URL to access PostgreSQL database.

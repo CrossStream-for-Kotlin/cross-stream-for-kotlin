@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import pt.isel.leic.cs4k.demo.Environment
 import pt.isel.leic.cs4k.demo.http.models.input.MessageInputModel
 import pt.isel.leic.cs4k.demo.http.models.output.SystemOutputModel
 import pt.isel.leic.cs4k.demo.services.ChatService
@@ -19,10 +20,17 @@ class ChatController(
 
     @GetMapping(Uris.Chat.LISTEN)
     fun listen(request: HttpServletRequest, @RequestParam group: String?): SseEmitter =
-        chatService.newListener(
-            group = group,
-            subscribedNode = request.getAttribute("node").toString()
-        )
+        if (Environment.getCS4KWithFlow()) {
+            chatService.newListenerFlow(
+                group = group,
+                subscribedNode = request.getAttribute("node").toString()
+            )
+        } else {
+            chatService.newListener(
+                group = group,
+                subscribedNode = request.getAttribute("node").toString()
+            )
+        }
 
     @PostMapping(Uris.Chat.SEND)
     fun send(request: HttpServletRequest, @RequestParam group: String?, @RequestBody body: MessageInputModel) {

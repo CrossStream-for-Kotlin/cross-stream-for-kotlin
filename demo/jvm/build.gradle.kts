@@ -81,6 +81,26 @@ task<Exec>("demoOption1PostgresComposeDown") {
     commandLine("docker-compose", "-f", "docker-compose-demo-option1-postgres.yaml", "down")
 }
 
+// Option 1 - PostgreSQL (with flow)
+
+task<Exec>("demoOption1PostgresFlowComposeUp") {
+    commandLine(
+        "docker-compose",
+        "-f",
+        "docker-compose-demo-option1-postgres-flow.yaml",
+        "up",
+        "--build",
+        "--force-recreate",
+        "--scale",
+        "spring-service=3"
+    )
+    dependsOn("extractUberJar")
+}
+
+task<Exec>("demoOption1PostgresFlowComposeDown") {
+    commandLine("docker-compose", "-f", "docker-compose-demo-option1-postgres-flow.yaml", "down")
+}
+
 // Option 2 - Redis
 
 task<Exec>("demoOption2RedisComposeUp") {

@@ -6,6 +6,7 @@ import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import pt.isel.leic.cs4k.Broker
@@ -36,6 +37,7 @@ class ChatService(val broker: Broker) {
                 messageQueueFlow.dequeue(Duration.INFINITE).let { (sseTracker, flow, handler) ->
                     val job = this.launch {
                         flow.collect { event ->
+                            logger.info("Collected event from flow -> {}", event)
                             handler(event)
                         }
                     }
@@ -190,6 +192,8 @@ class ChatService(val broker: Broker) {
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(ChatService::class.java)
+
         private val objectMapper = ObjectMapper().registerModules(KotlinModule.Builder().build())
 
         private fun serializeMessageToJson(message: Message) =

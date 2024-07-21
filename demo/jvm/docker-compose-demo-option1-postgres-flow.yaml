@@ -1,0 +1,45 @@
+version: "3.3"
+
+services:
+  postgres:
+    container_name: postgres
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-postgres
+    environment:
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=changeit
+      - POSTGRES_DB=db
+    ports:
+      - "5432:5432"
+
+  spring-service:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-spring
+    depends_on:
+      - postgres
+    environment:
+      WAIT_HOSTS: postgres:5432
+      PORT: 8080
+      POSTGRESQL_DB_URL: "jdbc:postgresql://postgres:5432/db?user=dbuser&password=changeit"
+      CS4K_OPTION: 1
+      CS4K_WITH_FLOW: "true"
+
+  nginx:
+    container_name: nginx
+    build:
+      context: ..
+      dockerfile: ./jvm/tests/Dockerfile-nginx
+    ports:
+      - "8088:8088"
+    depends_on:
+      - spring-service
+
+  # Just a machine running ubuntu, with 'dig' installed so that we can observe the docker compose environment.
+  ubuntu:
+    container_name: ubuntu
+    build:
+      context: .
+      dockerfile: tests/Dockerfile-ubuntu
+    tty: true
